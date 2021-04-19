@@ -1,11 +1,11 @@
 From Coq Require Import List.
-From Coq Require Import PeanoNat.
-(*From TLC Require Import LibFix.*)
+Import ListNotations.
+Import Nat.
+
 From TLC Require Export LibFix.
 From TLC Require Export LibVar.
 From TLC Require Export LibFset.
-Import ListNotations.
-Import Nat.
+
 
 (*
 locally nameless variable bindings - 

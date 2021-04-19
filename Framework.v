@@ -19,13 +19,7 @@ Proof.
 
 Hint Resolve term_abs_to_body body_to_term_abs.
 
-(* Properties of open and subst *)
-
-Lemma open_term : forall ts u,
-  body ts -> term u -> term (open_each_term ts u).
-
-
-
+(* Properties of subst *)
 Lemma subst_fresh : forall x t u,
   x \notin fv t -> (subst x u t) = t.
 Proof.

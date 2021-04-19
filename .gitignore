@@ -1,4 +1,5 @@
-*.vo?
+*.vo*
 *.aux
 *.bak
 *.glob
+*Makefile*
