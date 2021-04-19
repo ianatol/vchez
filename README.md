@@ -1,9 +1,10 @@
-### vchez
+# vchez
 
 ## How to run
 First, install the TLC library:
 
 `opam repo add coq-released http://coq.inria.fr/opam/released`
+
 `opam install -j4 coq-tlc`
 
 Then, create a makefile:
