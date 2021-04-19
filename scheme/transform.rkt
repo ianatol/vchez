@@ -1,6 +1,7 @@
 #lang racket
 
 (require rackunit)
+(require "lc_enum.rkt")
 
 ;assumptions
 ;  lambdas have one argument
@@ -24,7 +25,7 @@
      #:when (eq? i n)
      #t]
     [`(set! (bvar ,n) ,e) (has-assigning-set i e)] ;non-assigning set
-    [`(λ () . ,body) (has-assigning-set (+ i 1) body)] ;if let or lambda, increase abs index
+    [`(lam . ,body) (has-assigning-set (+ i 1) body)] ;if let or lambda, increase abs index
     [`(let ,v ,body) (has-assigning-set (+ i 1) body)]
     [`(let ,v ,e ...)
      (has-assigning-set-list (+ i 1) e)]
@@ -47,8 +48,8 @@
      `(set-car! (bvar ,n) ,(handle-assigning-set i e))]
     [`(set! (bvar ,n) ,e)
      `(set-top-level! (bvar ,n) ,(handle-assigning-set i e))] ;non-assigning set
-    [`(λ () . ,body)
-     `(λ () . ,(handle-assigning-set (+ i 1) body))] ;if let or lambda, increase abs index
+    [`(lam . ,body)
+     `(lam . ,(handle-assigning-set (+ i 1) body))] ;if let or lambda, increase abs index
     [`(let ,v ,body ...)
      `(let ,v ,(map (lambda (e)
                       (handle-assigning-set i e)) body))]
@@ -59,13 +60,16 @@
      `(,(handle-assigning-set i e1) ,(handle-assigning-set i e2))] ;if app, handle both exprs
     [x x]))
 
+(define (op? o)
+  (member o '(+ / * -)))
+
 (define (convert-assignments-list sfs exps)
   (match exps
     [`() `()]
     [`(,exp) (convert-assignments sfs exp)]
     [`(,e ,es ...)
      (list (convert-assignments sfs e) (convert-assignments-list sfs es))]))
-     
+
 ;convert assignments pass
 ;  sfs is the store
 ;  exp is the expression to be transformed
@@ -92,11 +96,15 @@
     [`(,e1 ,e2)
      `(,(convert-assignments sfs e1) ,(convert-assignments sfs e2))]
     ;abs
-    [`(λ () . ,body)
-     `(λ () . ,(convert-assignments sfs body))]
+    [`(lam . ,body)
+     `(lam . ,(convert-assignments sfs body))]
     ;top level set
     [`(set! ,v ,e)
      `(set-top-level! ,v ,(convert-assignments sfs e))]
+    ;bin op
+    [`(,o ,e1 ,e2)
+     #:when (op? o)
+     `(,o ,(convert-assignments sfs e1) ,(convert-assignments sfs e2))] 
     [x
      x]))
 
@@ -168,11 +176,14 @@
                  (let (cons (bvar 0) '())
                    ((car (bvar 0))
                     (set-car! (bvar 0) v2)))))
-                                   
+
+(define (ca-pass e)
+  (convert-assignments '() e))
+
 (define (no-sets? exp)
   (match exp
     [`(set! ,v ,e) #f]
-    [`(λ () . ,body) (no-sets? body)]
+    [`(lam . ,body) (no-sets? body)]
     [`(let ,v ,body) (no-sets? body)]
     [`(let ,v ,body ...)
      (and (map (lambda (e)
@@ -181,4 +192,3 @@
      (and (no-sets? e1) (no-sets? e2))] ;if app, handle both exprs
     [_ #t]))
                 
-        

@@ -23,7 +23,7 @@ Hint Resolve term_abs_to_body body_to_term_abs.
 Lemma subst_fresh : forall x t u,
   x \notin fv t -> (subst x u t) = t.
 Proof.
-  intros. induction t; simpls; f_equal~. 
+  intros. induction t; simpls; f_equal~.     
 Abort.
 
 
