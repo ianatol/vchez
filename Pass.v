@@ -17,14 +17,17 @@ Inductive OptionE (X : Type) : Type :=
 Arguments SomeE {X}.
 Arguments NoneE {X}.
 
-Definition orb_e (t1 : OptionE bool) (t2 : OptionE bool) : OptionE bool :=
-  match t1 with 
-  | SomeE c1 => match t2 with
-               | SomeE c2 => SomeE (orb c1 c2)
-               | NoneE s => NoneE s
-                end
-  | NoneE s => NoneE s
-  end.
+Notation "' p <- e1 ;; e2"
+   := (match e1 with
+       | SomeE p => e2
+       | NoneE err => NoneE err
+       end)
+   (right associativity, p pattern, at level 60, e1 at next level).
+
+
+
+Definition orb_e t1 t2 :=
+  ' c1 <- t1 ;; ' c2 <- t2 ;; SomeE (orb c1 c2).
 
 Fixpoint has_assigning_set (n : nat) (i : nat) (t : trm) :=
   match n with 
@@ -62,64 +65,31 @@ Fixpoint handle_assigning_set (n i : nat) (t : trm) :=
   | O => NoneE "Too many recursive calls"
   | S n' =>
     match t with
-    | trm_let v ts => match (handle_assigning_set_list n' (S i) ts) with
-                      | SomeE ts' => SomeE (trm_let v ts')
-                      | NoneE s => NoneE s
-                      end
-    | trm_abs ts => match (handle_assigning_set_list n' (S i) ts) with
-                    | SomeE ts' => SomeE (trm_abs ts')
-                    | NoneE s => NoneE s
-                    end
-    | trm_bvar n => if (i =? n) then SomeE (trm_car (trm_bvar n)) else SomeE (trm_bvar n)
-    | trm_set x t1 => let e_t1 := (handle_assigning_set n' i t1) in
-                      let e_x := (handle_assigning_set n' i x) in
-                      match x with
-                      | (trm_bvar n') => match e_t1 with
-                                        | SomeE t1' =>  if (i =? n') then SomeE (trm_setcar x t1') else SomeE (trm_set x t1')
-                                        | NoneE s => NoneE s
-                                        end
-                      | _ => match e_t1, e_x with
-                             | SomeE t1', SomeE x' => SomeE (trm_set x' t1')
-                             | NoneE s, _ => NoneE s
-                             | _, NoneE s => NoneE s
-                             end 
-                      end
-    | trm_app t1 t2 => let e_t1 := (handle_assigning_set n' i t1) in
-                       let e_t2 := (handle_assigning_set n' i t2) in
-                       match e_t1, e_t2 with
-                       | SomeE t1', SomeE t2' => SomeE (trm_app t1' t2')
-                       | NoneE s, _ => NoneE s
-                       | _, NoneE s => NoneE s
-                       end
-    | trm_setcar p v => let e_p := (handle_assigning_set n' i p) in
-                        let e_v := (handle_assigning_set n' i v) in
-                        match e_p, e_v with
-                        | SomeE p', SomeE v' => SomeE (trm_setcar p' v')
-                        | NoneE s, _ => NoneE s
-                        | _, NoneE s => NoneE s
+    | trm_let v ts =>   ' ts' <- (handle_assigning_set_list n' (S i) ts) ;; SomeE (trm_let v ts')
+    | trm_abs ts =>     ' ts' <- (handle_assigning_set_list n' (S i) ts) ;; SomeE (trm_abs ts')
+    | trm_bvar n =>     if (i =? n) then SomeE (trm_car (trm_bvar n)) else SomeE (trm_bvar n)
+    | trm_set x t1 =>   ' t1' <- (handle_assigning_set n' i t1) ;;
+                        ' x' <-  (handle_assigning_set n' i x) ;;
+                        match x with
+                        | trm_bvar n => if (i =? n) then SomeE (trm_setcar x t1') else SomeE (trm_set x t1')
+                        | _ => SomeE (trm_set x' t1')
                         end
-    | trm_setcdr p v => let e_p := (handle_assigning_set n' i p) in
-                        let e_v := (handle_assigning_set n' i v) in
-                        match e_p, e_v with
-                        | SomeE p', SomeE v' => SomeE (trm_setcdr p' v')
-                        | NoneE s, _ => NoneE s
-                        | _, NoneE s => NoneE s
-                        end
-    | trm_cons v1 v2 => let e_v1 := (handle_assigning_set n' i v1) in
-                        let e_v2 := (handle_assigning_set n' i v2) in
-                        match e_v1, e_v2 with
-                        | SomeE v1', SomeE v2' => SomeE (trm_cons v1' v2')
-                        | NoneE s, _ => NoneE s
-                        | _, NoneE s => NoneE s
-                        end
-    | trm_car p => match (handle_assigning_set n' i p) with
-                   | SomeE p' => SomeE (trm_car p')
-                   | NoneE s => NoneE s
-                   end
-    | trm_cdr p => match (handle_assigning_set n' i p) with
-                   | SomeE p' => SomeE (trm_cdr p')
-                   | NoneE s => NoneE s
-                   end
+    | trm_app t1 t2 =>  ' t1' <- (handle_assigning_set n' i t1) ;;
+                        ' t2' <- (handle_assigning_set n' i t2) ;;
+                        SomeE (trm_app t1' t2')
+    | trm_setcar p v => ' p' <- (handle_assigning_set n' i p) ;;
+                        ' v' <- (handle_assigning_set n' i v) ;;
+                        SomeE (trm_setcar p' v')
+    | trm_setcdr p v => ' p' <- (handle_assigning_set n' i p) ;;
+                        ' v' <- (handle_assigning_set n' i v) ;;
+                        SomeE (trm_setcdr p' v')
+    | trm_cons v1 v2 => ' v1' <- (handle_assigning_set n' i v1) ;;
+                        ' v2' <- (handle_assigning_set n' i v2) ;;
+                        SomeE (trm_cons v1' v2')
+    | trm_car p =>      ' p' <- (handle_assigning_set n' i p) ;;
+                        SomeE (trm_car p')
+    | trm_cdr p =>      ' p' <- (handle_assigning_set n' i p) ;;
+                        SomeE (trm_cdr p')
     | t => SomeE t
     end
   end
@@ -130,8 +100,49 @@ with handle_assigning_set_list (n i : nat) (ts : list trm) :=
   | S n' =>
     match ts with
     | nil => SomeE nil
-    | t :: ts' => let e_t := (handle_assigning_set n' i t) in
-                  let e_ts := (handle_assigning_set_list n' i ts) in
+    | t' :: ts' => ' e_t <- (handle_assigning_set n' i t') ;;
+                   ' e_ts <- (handle_assigning_set_list n' i ts') ;;
+                   SomeE(e_t :: e_ts)
+    end
+  end.
+
+Definition big_num := 1000.
+Definition handle_sets := handle_assigning_set big_num 0.
+Definition handle_sets_list := handle_assigning_set_list big_num 0.
+Definition has_sets := has_assigning_set big_num 0.
+Definition has_sets_list := has_assigning_set_list big_num 0.
+
+(*
+Fixpoint convert_assignments (n : nat) (t : trm) :=
+  match n with
+  | O => NoneE "Too many recursive calls"
+  | S n' =>
+    match t with
+    | trm_let v ts => let body := (handle_sets_list ts) in
+                        match body with
+                        | NoneE s => s
+                        | SomeE b => 
+                      let body' := (convert_assignments_list n' b) in
+                      match body' with
+                      | NoneE s => s
+                      | SomeE body'' =>
+                        if (has_sets_list ts) then
+                        SomeE (trm_let v 
+                                [trm_let (trm_cons (trm_bvar 0) (trm_null)) body''])
+                        else
+                        SomeE (trm_let v body')
+                      end
+    | _ => NoneE "test"
+    end
+  end
+with convert_assignments_list (n : nat) (ts : list trm) :=
+  match n with
+  | O => NoneE "Too many recursive calls"
+  | S n' =>
+    match ts with
+    | nil => SomeE nil
+    | t :: ts' => let e_t := (convert_assignments n' t) in
+                  let e_ts := (convert_assignments_list n' ts) in
                   match e_t, e_ts with
                   | SomeE t', SomeE ts' => SomeE (t' :: ts')
                   | NoneE s, _ => NoneE s
@@ -139,3 +150,4 @@ with handle_assigning_set_list (n i : nat) (ts : list trm) :=
                   end
     end
   end.
+*)
