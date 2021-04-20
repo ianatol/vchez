@@ -4,7 +4,7 @@ From Coq Require Export List.
 
 Hint Constructors term.
 
-Notation "'[[' x '~>' y ']]' t" := (subst x (trm_var (fvar y)) t) (at level 69).
+Notation "'[[' x '~>' y ']]' t" := (subst x (trm_fvar y) t) (at level 69).
 
 (* Properties of local closure *)
 Lemma term_abs_to_body : forall ts,
@@ -23,7 +23,11 @@ Hint Resolve term_abs_to_body body_to_term_abs.
 Lemma subst_fresh : forall x t u,
   x \notin fv t -> (subst x u t) = t.
 Proof.
-  intros. induction t; simpls; f_equal~.     
+  intros. induction t; simpls; f_equal~.
+  - admit.
+  - admit. 
+  - apply notin_singleton_r in H. rewrite var_compare_eq.
+    unfold not in H. 
 Abort.
 
 

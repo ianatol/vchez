@@ -20,9 +20,6 @@ Cofinite Quantification
 *)
 
 Implicit Types x y z : var.
-Inductive ln_var : Set :=
-  | bvar (i : nat)
-  | fvar (x : var).
 
 (*
 pre terms may contain non locally closed terms
@@ -40,7 +37,8 @@ Inductive trm : Set :=
   | trm_cons (v1 : trm)(v2 : trm)
   | trm_car (pair : trm)
   | trm_cdr (pair : trm)
-  | trm_var  (x : ln_var)
+  | trm_bvar (i : nat)
+  | trm_fvar (x : var)
   | trm_pp (n : var)
   | trm_num (i : nat)
   | trm_null
@@ -72,10 +70,8 @@ So we are replacing all (bvar k) with (fvar x), and incrementing k with abstract
 
 Fixpoint open_rec (k : nat) (u : trm) (t : trm) {struct t} : trm :=
   match t with
-  | trm_var x => match x with
-                 | bvar i => if (k =? i) then u else (trm_var (bvar i))
-                 | fvar x => t
-                 end
+  | trm_bvar i => if (k =? i) then u else t
+  | trm_fvar x => t
   | trm_abs ts => let open_rec_S := (open_rec (S k) u) in
                   trm_abs (map open_rec_S ts)
   | trm_let b ts => let open_rec_S := (open_rec (S k) u) in
@@ -95,7 +91,7 @@ Notation "{ k ~> u } t" := (open_rec k u t) (at level 67).
 Definition open t u := open_rec 0 u t.
 
 Notation "t ^^ u" := (open t u) (at level 67).
-Notation "t ^ x" := (open t (trm_var (fvar x))).
+Notation "t ^ x" := (open t (trm_fvar x)).
 
 (*
 Closing a term is the inverse of opening.
@@ -103,10 +99,8 @@ Replaces a free var z with bvar n where n is the current level of abstraction
 *)
 Fixpoint close_var_rec (k : nat) (z : var) (t : trm) {struct t} : trm :=
   match t with
-  | trm_var x => match x with
-                 | fvar x => if var_compare x z then (trm_var (bvar k)) else t
-                 | bvar i => t
-                 end
+  | trm_bvar i => t
+  | trm_fvar x => if var_compare x z then (trm_bvar k) else t
   | trm_abs ts => let close_var_rec_S := (close_var_rec (S k) z) in
                   trm_abs (map close_var_rec_S ts)
   | trm_let b ts => let close_var_rec_S := (close_var_rec (S k) z) in
@@ -137,8 +131,8 @@ Fixpoint open_each_term ts u :=
 
 
 Inductive term : trm -> Prop :=
-  | term_var : forall x,
-      term (trm_var (fvar x))
+  | term_fvar : forall x,
+      term (trm_fvar x)
   | term_app : forall t1 t2,
       term t1 -> term t2 -> term (trm_app t1 t2)
   | term_abs : forall L ts,
@@ -196,27 +190,37 @@ Fixpoint big_unionf (ts : list trm) (f : trm -> vars) : vars :=
 
 (* Free variables of a term *)
 Fixpoint fv (t : trm) : vars :=
-  match t with
-  | trm_var x => match x with 
-                 | bvar i => \{}
-                 | fvar y => \{y}
-                 end
-  | trm_let b ts => @fold_left (vars) (vars) (@union var) (map fv (b :: ts)) \{}
-  | trm_abs ts => @fold_left (vars) (vars) (@union var) (map fv ts) \{}
-  | trm_app t1 t2 => (fv t1) \u (fv t2)
-  | trm_set x t1 => (fv x) \u (fv t1)
-  | trm_setcar p v => (fv p) \u (fv v)
-  | trm_setcdr p v => (fv p) \u (fv v)
-  | trm_cons v1 v2 => (fv v1) \u (fv v2)
-  | trm_car p => fv p
-  | trm_cdr p => fv p
-  | _ => \{}
-  end.
+  let fix fvs (ts : list trm) : vars :=
+    match ts with
+    | [] => \{}
+    | t :: ts' => fv t \u fvs ts'
+    end
+  in
+    match t with
+    | trm_fvar y => \{y}
+    | trm_bvar _ => \{}
+    | trm_let b ts => (fv b) \u (fvs ts) (* @fold_left (vars) (vars) (@union var) (map fv (b :: ts)) \{} *)
+    | trm_abs ts => fvs ts (* @fold_left (vars) (vars) (@union var) (map fv ts) \{} *)
+    | trm_app t1 t2 => (fv t1) \u (fv t2)
+    | trm_set x t1 => (fv x) \u (fv t1)
+    | trm_setcar p v => (fv p) \u (fv v)
+    | trm_setcdr p v => (fv p) \u (fv v)
+    | trm_cons v1 v2 => (fv v1) \u (fv v2)
+    | trm_car p => fv p
+    | trm_cdr p => fv p
+    | _ => \{}
+    end.
 
 Fixpoint subst (z : var) (u : trm) (t : trm) {struct t} : trm :=
+  let fix substs (ts : list trm) :=
+    match ts with
+    | [] => []
+    | t' :: ts' => (subst z u t') :: (substs ts')
+    end
+  in
   match t with
-  | trm_let v ts => trm_let (subst z u v) (map (subst z u) ts)
-  | trm_abs ts => trm_abs (map (subst z u) ts)
+  | trm_let v ts => trm_let (subst z u v) (substs ts)
+  | trm_abs ts => trm_abs (substs ts)
   | trm_app t1 t2 => trm_app (subst z u t1) (subst z u t2)
   | trm_set x t1 => trm_set (subst z u x) (subst z u t1)
   | trm_setcar p v => trm_setcar (subst z u p) (subst z u v)
@@ -224,10 +228,8 @@ Fixpoint subst (z : var) (u : trm) (t : trm) {struct t} : trm :=
   | trm_cons v1 v2 => trm_cons (subst z u v1) (subst z u v2)
   | trm_car p => trm_car (subst z u p)
   | trm_cdr p => trm_cdr (subst z u p)
-  | trm_var x => match x with
-                 | bvar i => t
-                 | fvar n => if (var_compare n z) then u else t
-                 end
+  | trm_fvar x => if (var_compare x z) then u else t
+  | trm_bvar i => t
   | _ => t
   end.
 
@@ -254,7 +256,8 @@ Fixpoint trm_size (t : trm) {struct t} : nat :=
   | trm_cons v1 v2 => 1 + (trm_size v1) + (trm_size v2)
   | trm_car p => 1 + (trm_size p)
   | trm_cdr p => 1 + (trm_size p)
-  | trm_var x => 1
+  | trm_fvar _ => 1
+  | trm_bvar _ => 1
   | _ => 1
   end.
 
