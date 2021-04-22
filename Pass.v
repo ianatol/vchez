@@ -169,19 +169,62 @@ with convert_assignments_list (n : nat) (ts : list s_trm) :=
     end
   end.
 
-
-(*    | s_trm_let v ts => ' ts_has_set <- (has_sets_list ts) ;;
-                      if ts_has_set then
-                        ' body <- (handle_sets_list ts) ;;
-                        ' body' <- (convert_assignments_list n' body) ;;
-                        SomeE (s_trm_let v
-                                [s_trm_let (s_trm_cons (s_trm_bvar 0) (s_trm_null)) body'])
-                      else
-                        ' body <- (convert_assignments_list n' ts) ;;
-                        SomeE (s_trm_let v body)
-*)
+(*changes let v ts into app (abs ts) v
+  also changes set top into setting a free variable *)
+Fixpoint de_sugar n t :=
+  match n with
+  | O => NoneE "Too many recursive calls"
+  | S n' =>
+    match t with
+    | t_trm_abs ts =>      ' ts' <- de_sugar_list n' ts ;;
+                           SomeE (s_trm_abs ts')
+    | t_trm_app t1 t2 =>   ' t1' <- de_sugar n' t1 ;;
+                           ' t2' <- de_sugar n' t2 ;;
+                           SomeE (s_trm_app t1' t2')
+    | t_trm_let v ts =>    ' v' <- de_sugar n' v ;;
+                           ' ts' <- de_sugar_list n' ts ;;
+                           SomeE (s_trm_app (s_trm_abs ts') v')
+    | t_trm_set_top x v => ' v' <- de_sugar n' v ;;
+                            SomeE (s_trm_set (s_trm_fvar x) v')
+    | t_trm_begin ts =>    ' ts' <- de_sugar_list n' ts ;;
+                           SomeE (s_trm_begin ts')
+    | t_trm_setcar p v =>  ' p' <- de_sugar n' p ;;
+                           ' v' <- de_sugar n' v ;;
+                           SomeE (s_trm_setcar p' v')
+    | t_trm_setcdr p v =>  ' p' <- de_sugar n' p ;;
+                           ' v' <- de_sugar n' v ;;
+                           SomeE (s_trm_setcdr p' v')
+    | t_trm_cons v1 v2 =>  ' v1' <- de_sugar n' v1 ;;
+                           ' v2' <- de_sugar n' v2 ;;
+                           SomeE (s_trm_cons v1' v2')
+    | t_trm_car p =>       ' p' <- de_sugar n' p ;;
+                           SomeE (s_trm_car p')
+    | t_trm_cdr p =>       ' p' <- de_sugar n' p ;;
+                           SomeE (s_trm_cdr p')
+    | t_trm_bvar i => SomeE (s_trm_bvar i)
+    | t_trm_fvar x => SomeE (s_trm_fvar x)
+    | t_trm_pp n => SomeE (s_trm_pp n)
+    | t_trm_num i => SomeE (s_trm_num i)
+    | t_trm_null => SomeE s_trm_null
+    | t_trm_true => SomeE s_trm_true
+    | t_trm_false => SomeE s_trm_false
+    end
+  end
+with de_sugar_list n ts :=
+  match n with 
+  | O => NoneE "Too many recursive calls"
+  | S n' => 
+    match ts with 
+    | nil => SomeE nil
+    | t :: ts' => ' t' <- de_sugar n' t ;;
+                  ' ts'' <- de_sugar_list n' ts' ;;
+                  SomeE (t' :: ts'')
+    end
+  end.
 
 Definition ca t :=
   convert_assignments big_num t.
 
+Definition desugar t :=
+  de_sugar big_num t.
   
