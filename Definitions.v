@@ -190,17 +190,17 @@ Fixpoint big_unionf (ts : list trm) (f : trm -> vars) : vars :=
 
 (* Free variables of a term *)
 Fixpoint fv (t : trm) : vars :=
-  let fix fvs (ts : list trm) : vars :=
+  let fix fvs' (ts : list trm) : vars :=
     match ts with
     | [] => \{}
-    | t :: ts' => fv t \u fvs ts'
+    | t :: ts' => fv t \u fvs' ts'
     end
   in
     match t with
     | trm_fvar y => \{y}
     | trm_bvar _ => \{}
-    | trm_let b ts => (fv b) \u (fvs ts) (* @fold_left (vars) (vars) (@union var) (map fv (b :: ts)) \{} *)
-    | trm_abs ts => fvs ts (* @fold_left (vars) (vars) (@union var) (map fv ts) \{} *)
+    | trm_let b ts => (fv b) \u (fvs' ts) (* @fold_left (vars) (vars) (@union var) (map fv (b :: ts)) \{} *)
+    | trm_abs ts => fvs' ts (* @fold_left (vars) (vars) (@union var) (map fv ts) \{} *)
     | trm_app t1 t2 => (fv t1) \u (fv t2)
     | trm_set x t1 => (fv x) \u (fv t1)
     | trm_setcar p v => (fv p) \u (fv v)
@@ -210,6 +210,12 @@ Fixpoint fv (t : trm) : vars :=
     | trm_cdr p => fv p
     | _ => \{}
     end.
+
+Fixpoint fvs (ts : list trm) : vars :=
+  match ts with 
+  | [] => \{}
+  | t :: ts' => fv t \u fvs ts'
+  end.
 
 Fixpoint subst (z : var) (u : trm) (t : trm) {struct t} : trm :=
   let fix substs (ts : list trm) :=

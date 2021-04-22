@@ -29,7 +29,7 @@ Notation "' p <- e1 ;; e2"
 Definition orb_e t1 t2 :=
   ' c1 <- t1 ;; ' c2 <- t2 ;; SomeE (orb c1 c2).
 
-Fixpoint has_assigning_set (n : nat) (i : nat) (t : trm) :=
+Fixpoint has_assigning_set (n i : nat) (t : trm) :=
   match n with 
   | O => NoneE "Too many recursive calls"
   | S n' => 
@@ -50,7 +50,7 @@ Fixpoint has_assigning_set (n : nat) (i : nat) (t : trm) :=
     end
   end
 
-with has_assigning_set_list (n : nat)(i : nat) (ts : list trm) :=
+with has_assigning_set_list (n i : nat) (ts : list trm) :=
   match n with 
   | O => NoneE "Too many recursive calls"
   | S n' => 
@@ -69,10 +69,9 @@ Fixpoint handle_assigning_set (n i : nat) (t : trm) :=
     | trm_abs ts =>     ' ts' <- (handle_assigning_set_list n' (S i) ts) ;; SomeE (trm_abs ts')
     | trm_bvar n =>     if (i =? n) then SomeE (trm_car (trm_bvar n)) else SomeE (trm_bvar n)
     | trm_set x t1 =>   ' t1' <- (handle_assigning_set n' i t1) ;;
-                        ' x' <-  (handle_assigning_set n' i x) ;;
                         match x with
                         | trm_bvar n => if (i =? n) then SomeE (trm_setcar x t1') else SomeE (trm_set x t1')
-                        | _ => SomeE (trm_set x' t1')
+                        | _ => SomeE (trm_set x t1')
                         end
     | trm_app t1 t2 =>  ' t1' <- (handle_assigning_set n' i t1) ;;
                         ' t2' <- (handle_assigning_set n' i t2) ;;
@@ -112,27 +111,42 @@ Definition handle_sets_list := handle_assigning_set_list big_num 0.
 Definition has_sets := has_assigning_set big_num 0.
 Definition has_sets_list := has_assigning_set_list big_num 0.
 
-(*
 Fixpoint convert_assignments (n : nat) (t : trm) :=
   match n with
   | O => NoneE "Too many recursive calls"
   | S n' =>
     match t with
-    | trm_let v ts => let body := (handle_sets_list ts) in
-                        match body with
-                        | NoneE s => s
-                        | SomeE b => 
-                      let body' := (convert_assignments_list n' b) in
-                      match body' with
-                      | NoneE s => s
-                      | SomeE body'' =>
-                        if (has_sets_list ts) then
-                        SomeE (trm_let v 
-                                [trm_let (trm_cons (trm_bvar 0) (trm_null)) body''])
-                        else
-                        SomeE (trm_let v body')
-                      end
-    | _ => NoneE "test"
+    | trm_let v ts => ' ts_has_set <- (has_sets_list ts) ;;
+                      if ts_has_set then
+                        ' body <- (handle_sets_list ts) ;;
+                        ' body' <- (convert_assignments_list n' body) ;;
+                        SomeE (trm_let v
+                                [trm_let (trm_cons (trm_bvar 0) (trm_null)) body'])
+                      else
+                        ' body <- (convert_assignments_list n' ts) ;;
+                        SomeE (trm_let v body)
+    | trm_fvar x => SomeE (trm_fvar x)
+    | trm_abs ts => ' body <- (convert_assignments_list n' ts) ;;
+                    SomeE (trm_abs body)
+    | trm_app t1 t2 => ' t1' <- (convert_assignments n' t1) ;;
+                       ' t2' <- (convert_assignments n' t2) ;;
+                       SomeE (trm_app t1' t2')
+    | trm_set x t1 => ' t1' <- (convert_assignments n' t1) ;;
+                      SomeE (trm_set x t1')
+    | trm_setcar p v => ' p' <- (convert_assignments n' p) ;;
+                        ' v' <- (convert_assignments n' v) ;;
+                        SomeE (trm_setcar p' v')
+    | trm_setcdr p v => ' p' <- (convert_assignments n' p) ;;
+                        ' v' <- (convert_assignments n' v) ;;
+                        SomeE (trm_setcdr p' v')
+    | trm_cons v1 v2 => ' v1' <- (convert_assignments n' v1) ;;
+                        ' v2' <- (convert_assignments n' v2) ;;
+                        SomeE (trm_cons v1' v2')
+    | trm_car p =>      ' p' <- (convert_assignments n' p) ;;
+                        SomeE (trm_car p')
+    | trm_cdr p =>      ' p' <- (convert_assignments n' p) ;;
+                        SomeE (trm_cdr p')
+    | t' => SomeE t'
     end
   end
 with convert_assignments_list (n : nat) (ts : list trm) :=
@@ -141,13 +155,13 @@ with convert_assignments_list (n : nat) (ts : list trm) :=
   | S n' =>
     match ts with
     | nil => SomeE nil
-    | t :: ts' => let e_t := (convert_assignments n' t) in
-                  let e_ts := (convert_assignments_list n' ts) in
-                  match e_t, e_ts with
-                  | SomeE t', SomeE ts' => SomeE (t' :: ts')
-                  | NoneE s, _ => NoneE s
-                  | _, NoneE s => NoneE s
-                  end
+    | t :: ts' => ' e_t <- (convert_assignments n' t) ;;
+                  ' e_ts <- (convert_assignments_list n' ts') ;;
+                  SomeE (e_t :: e_ts)
     end
   end.
-*)
+
+Definition ca t :=
+  convert_assignments big_num t.
+
+  
