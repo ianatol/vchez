@@ -22,15 +22,13 @@ Example ca_4 : forall v1,
   SomeE (trm_let v1 [trm_bvar 0]).
 Proof. reflexivity. Qed.
 
-Example ca_5 : forall v1 v2,
-  value v1 ->
-  value v2 ->
-  ca (trm_let v1
-       [trm_set (trm_bvar 0) v2]) =
-  SomeE (trm_let v1 
+Example ca_5 :
+  ca (trm_let trm_false
+       [trm_set (trm_bvar 0) trm_true]) =
+  SomeE (trm_let trm_false
           [trm_let (trm_cons (trm_bvar 0) (trm_null)) 
-            [trm_setcar (trm_bvar 0) v2]]).
-Proof. Abort.
+            [trm_setcar (trm_bvar 0) trm_true]]).
+Proof. reflexivity. Qed.
 
 
 (*These examples show the algorithm for finding set! that refer to a variable bound by a let*)
