@@ -2,35 +2,34 @@ From vchez Require Export Definitions.
 From TLC Require Import LibLN.
 From Coq Require Export List.
 
-Hint Constructors term : core.
-
-Notation "'[[' x '~>' y ']]' t" := (subst x (trm_fvar y) t) (at level 69).
+Hint Constructors s_term : core.
+Hint Constructors t_term : core.
 
 (* Properties of local closure *)
-Lemma term_abs_to_body : forall ts,
-  term (trm_abs ts) -> body ts.
+Lemma s_term_abs_to_body : forall ts,
+  s_term (s_trm_abs ts) -> s_body ts.
 Proof.
-  intros. unfold body. inversion* H. Qed.
+  intros. unfold s_body. inversion* H. Qed.
 
-Lemma body_to_term_abs : forall ts,
-  body ts -> term (trm_abs ts).
+Lemma t_term_abs_to_body : forall ts,
+  t_term (t_trm_abs ts) -> t_body ts.
+Proof.
+  intros. unfold t_body. inversion* H. Qed.
+
+Lemma s_body_to_term_abs : forall ts,
+  s_body ts -> s_term (s_trm_abs ts).
 Proof.
   intros. inversion* H. Qed.
 
-Hint Resolve term_abs_to_body body_to_term_abs.
-
-Lemma subst_fresh_ts : forall x ts u,
-  x \notin fvs ts -> (map (subst x u) ts) = ts.
+Lemma t_body_to_term_abs : forall ts,
+  t_body ts -> t_term (t_trm_abs ts).
 Proof.
-  intros. Abort.
+  intros. inversion* H. Qed.
 
-  
-(* Properties of subst *)
-Lemma subst_fresh : forall x t u,
-  x \notin fv t -> (subst x u t) = t.
-Proof.
-  intros.
-Abort.
+Hint Resolve s_term_abs_to_body 
+             t_term_abs_to_body 
+             s_body_to_term_abs
+             t_body_to_term_abs.
 
 (*
 To Prove:
