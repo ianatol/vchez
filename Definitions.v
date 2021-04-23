@@ -6,6 +6,10 @@ From TLC Require Export LibFix.
 From TLC Require Export LibVar.
 From TLC Require Export LibFset.
 
+(*
+Defines the syntax of our source and target languages,
+as well as a capture-avoiding subsititution based on locally nameless bindings
+*)
 
 (*
 locally nameless variable bindings - 
@@ -67,6 +71,7 @@ Inductive t_trm : Set :=
   | t_trm_true
   | t_trm_false.
 
+(* values in source and target languages *)
 Inductive s_val : s_trm -> Prop :=
   | sval_abs : forall ts,
       s_val (s_trm_abs ts)
@@ -89,8 +94,9 @@ Inductive t_val : t_trm -> Prop :=
   | tval_true : t_val (t_trm_true)
   | tval_false : t_val (t_trm_false).
 
+
 (* 
-Opening a term t with a term u containing a fresh free variable x.
+Opening a trm t with a trm u containing a fresh free variable x.
   so u = (s_trm_var (fvar x))
 To do so, we replace all references to local bvar with u.
 This means we have to keep track of the current level of abstraction with k
@@ -211,6 +217,8 @@ Fixpoint t_open_each_term ts u :=
   | t :: ts' => (t ^^s u) :: t_open_each_term ts' u
   end.
 
+
+(* terms are locally closed - that is, they *)
 Inductive s_term : s_trm -> Prop :=
   | s_term_fvar : forall x,
       s_term (s_trm_fvar x)

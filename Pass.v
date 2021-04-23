@@ -1,30 +1,14 @@
 From vchez Require Import Definitions.
+From vchez Require Import Helpers.
 From Coq Require Import Strings.String.
 From Coq Require Import List.
 Import ListNotations.
 Import Nat.
 
 (* 
-convert_assignments
-has-assigning-set
-handle-assigning-set
+Defines the np-convert-assignments pass, which converts s_trm to t_trm,
+as well as a pass that desugars t_trm by converting lets into lambda applications
 *)
-
-Inductive OptionE (X : Type) : Type :=
-  | SomeE (x : X)
-  | NoneE (s : string).
-
-Arguments SomeE {X}.
-Arguments NoneE {X}.
-
-Notation "' p <- e1 ;; e2"
-   := (match e1 with
-       | SomeE p => e2
-       | NoneE err => NoneE err
-       end)
-   (right associativity, p pattern, at level 60, e1 at next level).
-
-
 
 Definition orb_e t1 t2 :=
   ' c1 <- t1 ;; ' c2 <- t2 ;; SomeE (orb c1 c2).

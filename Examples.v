@@ -1,5 +1,6 @@
 From vchez Require Export Definitions.
 From vchez Require Export Pass.
+From vchez Require Import Helpers.
 From Coq Require Import List.
 Import ListNotations.
 
