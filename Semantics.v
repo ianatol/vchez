@@ -34,16 +34,25 @@ Fixpoint fill_ec (F : ec_f) (t : s_trm) :=
   | ec_begin_ts F' ts => s_trm_begin ((fill_ec F' t) :: ts)
   | ec_begin_vs vs F' ts => s_trm_begin (vs ++ (fill_ec F' t) :: ts)
   end.
-  
 
-Notation "' P sfs F [ t ]" := (s_prog sfs (fill_ec F t)) (at level 70).
-(* 
+Notation "` P sfs [ t ]" := (s_prog sfs (fill_ec ec_hole t)) (at level 70).
+(* Notation "' P sfs F [ t ]" := (s_prog sfs (fill_ec F t)) (at level 70). *)
+
 Reserved Notation " t '|->' t' " (at level 71).
 
-Inductive small_step : ec_p -> ec_p -> Prop :=
-  | ss_cons : forall F v1 v2,
+Inductive small_step : prog -> prog -> Prop :=
+  | begin_single : forall t1 sfs,
+      s_term t1 ->
+      (s_prog sfs (fill_ec ec_hole (s_trm_begin [t1]))) |->
+      (s_prog sfs (fill_ec ec_hole t1))
+      
+      
+where "t '|->' t'" := (small_step t t').
+
+(*
+  | ss_cons : forall F v1 v2 sfs,
       s_val v1 ->
       s_val v2 ->
-      ' P sfs F [ s_trm_cons v1 v2] |->
+      ' P sfs F [s_trm_cons v1 v2] |->
       ' P 
 *)
