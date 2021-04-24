@@ -81,7 +81,16 @@ Inductive s_val : s_trm -> Prop :=
       s_val (s_trm_num i)
   | sval_null : s_val (s_trm_null)
   | sval_true : s_val (s_trm_true)
-  | sval_false : s_val (s_trm_false).
+  | sval_false : s_val (s_trm_false)
+  
+with s_vals : list s_trm -> Prop :=
+  | s_vals_nil : s_vals([])
+  | s_vals_single : forall t, s_val t -> s_vals [t]
+  | s_vals_next : 
+      forall t ts,
+        s_vals ts -> 
+        s_val t ->
+        s_vals (t :: ts).
 
 Inductive t_val : t_trm -> Prop :=
   | tval_abs : forall ts,
@@ -336,6 +345,12 @@ Fixpoint s_fv (t : s_trm) : vars :=
     | _ => \{}
     end.
 
+Fixpoint s_fvs ts :=
+  match ts with
+  | [] => \{}
+  | t :: ts' => s_fv t \u s_fvs ts'
+  end.
+
 Fixpoint t_fv (t : t_trm) : vars :=
   let fix fvs' (ts : list t_trm) : vars :=
     match ts with
@@ -378,6 +393,12 @@ Fixpoint s_subst (z : var) (u : s_trm) (t : s_trm) {struct t} : s_trm :=
   | s_trm_fvar x => if (var_compare x z) then u else t
   | s_trm_bvar i => t
   | _ => t
+  end.
+
+Fixpoint s_substs z u ts :=
+  match ts with
+  | [] => []
+  | t' :: ts' => (s_subst z u t') :: (s_substs z u ts')
   end.
 
 Fixpoint t_subst (z : var) (u : t_trm) (t : t_trm) {struct t} : t_trm :=
@@ -440,5 +461,3 @@ Fixpoint t_trm_size (t : t_trm) {struct t} : nat :=
   | t_trm_bvar _ => 1
   | _ => 1
   end.
-
-
