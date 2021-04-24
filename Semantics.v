@@ -133,7 +133,6 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
   | step_ctx : 
     forall C s e s' e',
     eval_ctx C -> (*C is a valid eval ctx*)
-    s_term e -> s_term e' -> (* e and e' are well formed terms *)
     step s e   s' e' -> (* a step outside of a context *)
     step s (C e)  s' (C e') (* implies the step applies inside a context *)
 
@@ -242,7 +241,14 @@ Inductive multi_step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
     multi_step s1 t1 s3 t3.
 
 Hint Constructors multi_step.
-    
 
+Lemma steps_context :
+  forall C s e s' e',
+  eval_ctx C ->
+  multi_step s e s' e' ->
+  multi_step s (C e) s' (C e').
+Proof.
+  intros. induction H0; eauto.
+Qed.
 
 
