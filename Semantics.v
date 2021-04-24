@@ -223,6 +223,25 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
     s_val v ->
     step s  (s_trm_setcdr (s_trm_pp pp) v)
          (update_sf_pp_cdr s pp v) (s_trm_null).
+
+Hint Constructors step.
+
+Inductive multi_step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
+  | mstep_none :
+    forall s t,
+    multi_step s t s t
+
+  | mstep_one :
+    forall s1 t1 s2 t2,
+    step s1 t1 s2 t2 ->
+    multi_step s1 t1 s2 t2
+  
+  | mstep_trans :
+    forall s1 t1 s2 t2 s3 t3,
+    multi_step s1 t1 s2 t2 -> multi_step s2 t2 s3 t3 ->
+    multi_step s1 t1 s3 t3.
+
+Hint Constructors multi_step.
     
 
 
