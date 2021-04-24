@@ -27,6 +27,15 @@ Fixpoint get_sf_vars sfs :=
                   end
   end.
 
+Fixpoint get_sf_pps sfs :=
+  match sfs with
+  | nil => empty
+  | sf :: sfs' => match sf with
+                  | store_cons pp v => \{pp} \u (get_sf_pps sfs')
+                  | _ => get_sf_pps sfs'
+                  end
+  end.
+
 Fixpoint get_val x sfs :=
   match sfs with 
   | nil => NoneE "Var not in store"
@@ -41,26 +50,73 @@ Fixpoint get_val x sfs :=
                   end
   end.
 
+Fixpoint get_pair pp sfs :=
+  match sfs with 
+  | nil => NoneE "Pair pointer not in store"
+  | sf :: sfs' => match sf with
+                  | store_cons pp' p => if (var_compare pp pp')
+                                           then SomeE p
+                                           else get_pair pp sfs'
+                  | _ => get_pair pp sfs'
+                  end
+  end.
+
 Definition get_fresh sfs t :=
   var_gen ((get_sf_vars sfs) \u (s_fv t)).
+
+Definition get_fresh_pp sfs :=
+  var_gen (get_sf_pps sfs).
 
 Definition get_fresh_list sfs ts :=
   var_gen ((get_sf_vars sfs) \u (s_fvs ts)).
 
-Fixpoint update_sfs sfs x v :=
+Fixpoint update_sf_var sfs x v :=
   match sfs with 
   | nil => NoneE "Update on empty store, or var not found"
   | sf :: sfs' => match sf with
                   | store_val y w => if (var_compare x y) 
                                      then SomeE (store_val y v :: sfs')
-                                     else ' sfs'' <- (update_sfs sfs' x v) ;;
+                                     else ' sfs'' <- (update_sf_var sfs' x v) ;;
                                           SomeE (sf :: sfs'')
                   | store_bh y => if (var_compare x y) 
                                   then NoneE "Tried to access bh value" 
-                                  else ' sfs'' <- (update_sfs sfs' x v) ;;
+                                  else ' sfs'' <- (update_sf_var sfs' x v) ;;
                                        SomeE (sf :: sfs'')
-                  | store_cons _ _ =>  ' sfs'' <- (update_sfs sfs' x v) ;;
+                  | store_cons _ _ =>  ' sfs'' <- (update_sf_var sfs' x v) ;;
                                        SomeE (sf :: sfs'')
+                  end
+  end.
+
+
+Fixpoint update_sf_pp_car sfs pp v := 
+  match sfs with 
+  | nil => NoneE "Update on empty store, or pp not found"
+  | sf :: sfs' => match sf with
+                  | store_cons pp' p => if (var_compare pp pp')
+                                        then match p with
+                                             | s_trm_cons v1 v2 => SomeE (store_cons pp (s_trm_cons v v2) :: sfs')
+                                             | _ => NoneE "PP points to non-cons"
+                                             end
+                                        else ' sfs'' <- (update_sf_pp_car sfs' pp v) ;;
+                                             SomeE (sf :: sfs'')
+                  | _ => ' sfs'' <- (update_sf_pp_car sfs' pp v) ;;
+                         SomeE (sf :: sfs'')
+                  end
+  end.
+
+Fixpoint update_sf_pp_cdr sfs pp v := 
+  match sfs with 
+  | nil => NoneE "Update on empty store, or pp not found"
+  | sf :: sfs' => match sf with
+                  | store_cons pp' p => if (var_compare pp pp')
+                                        then match p with
+                                             | s_trm_cons v1 v2 => SomeE (store_cons pp (s_trm_cons v1 v) :: sfs')
+                                             | _ => NoneE "PP points to non-cons"
+                                             end
+                                        else ' sfs'' <- (update_sf_pp_cdr sfs' pp v) ;;
+                                             SomeE (sf :: sfs'')
+                  | _ => ' sfs'' <- (update_sf_pp_cdr sfs' pp v) ;;
+                         SomeE (sf :: sfs'')
                   end
   end.
 
@@ -127,7 +183,7 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
   | step_set : (* set a fvar's value in store *)
     forall s x v s',
     s_val v -> 
-    update_sfs s x v = SomeE s' ->
+    update_sf_var s x v = SomeE s' ->
     step s  (s_trm_set (s_trm_fvar x) v)
          s' (s_trm_null)
 
@@ -140,6 +196,44 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
   | step_begin_single : (* a single term in a begin reduces to just that term *)
     forall s t,
     step s (s_trm_begin (t :: nil))
-         s t.
+         s t
+
+  | step_cons_store : (* puts a cons into store *)
+    forall s v1 v2 fresh_pp,
+    s_val v1 ->
+    s_val v2 ->
+    fresh_pp = get_fresh_pp s ->
+    step s (s_trm_cons v1 v2)
+         ((store_cons fresh_pp (s_trm_cons v1 v2)) :: s) (s_trm_pp fresh_pp)
+
+  | step_car :
+    forall s pp p v1 v2,
+    get_pair pp s = SomeE p ->
+    p = s_trm_cons v1 v2 ->
+    step s (s_trm_car (s_trm_pp pp))
+         s v1
+
+  | step_cdr :
+    forall s pp p v1 v2,
+    get_pair pp s = SomeE p ->
+    p = s_trm_cons v1 v2 ->
+    step s (s_trm_car (s_trm_pp pp))
+         s v2
+    
+  | step_setcar :
+    forall s pp v s',
+    s_val v ->
+    update_sf_pp_car s pp v = SomeE s' ->
+    step s  (s_trm_setcar (s_trm_pp pp) v) 
+         s' (s_trm_null)
+  
+  | step_setcdr :
+    forall s pp v s',
+    s_val v ->
+    update_sf_pp_cdr s pp v = SomeE s' ->
+    step s  (s_trm_setcdr (s_trm_pp pp) v)
+         s' (s_trm_null).
+    
+
 
 
