@@ -27,12 +27,42 @@ Fixpoint get_sf_vars sfs :=
                   end
   end.
 
+Fixpoint get_val x sfs :=
+  match sfs with 
+  | nil => NoneE "Var not in store"
+  | sf :: sfs' => match sf with
+                  | store_val y v => if (var_compare x y) 
+                                     then SomeE v 
+                                     else get_val x sfs'
+                  | store_bh y => if (var_compare x y) 
+                                  then NoneE "Tried to access bh value" 
+                                  else get_val x sfs'
+                  | store_cons _ _ => get_val x sfs'
+                  end
+  end.
+
 Definition get_fresh sfs t :=
   var_gen ((get_sf_vars sfs) \u (s_fv t)).
 
 Definition get_fresh_list sfs ts :=
   var_gen ((get_sf_vars sfs) \u (s_fvs ts)).
 
+Fixpoint update_sfs sfs x v :=
+  match sfs with 
+  | nil => NoneE "Update on empty store, or var not found"
+  | sf :: sfs' => match sf with
+                  | store_val y w => if (var_compare x y) 
+                                     then SomeE (store_val y v :: sfs')
+                                     else ' sfs'' <- (update_sfs sfs' x v) ;;
+                                          SomeE (sf :: sfs'')
+                  | store_bh y => if (var_compare x y) 
+                                  then NoneE "Tried to access bh value" 
+                                  else ' sfs'' <- (update_sfs sfs' x v) ;;
+                                       SomeE (sf :: sfs'')
+                  | store_cons _ _ =>  ' sfs'' <- (update_sfs sfs' x v) ;;
+                                       SomeE (sf :: sfs'')
+                  end
+  end.
 
 Inductive prog : Set :=
   | s_prog (sfs : sf) (e : s_trm).
@@ -84,4 +114,32 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
              (s_substs 
                x
                v
-               (s_open_each ts x))).
+               (s_open_each ts x)))
+
+  | step_var : (* get a variable's value from store *)
+    forall s x v,
+    get_val x s = SomeE v -> 
+    step s (s_trm_fvar x)
+         s v
+  
+  (* although set! can be called on bvars, 
+     there is no semantic rule because such set!s only have meaning after substitution *)
+  | step_set : (* set a fvar's value in store *)
+    forall s x v s',
+    s_val v -> 
+    update_sfs s x v = SomeE s' ->
+    step s  (s_trm_set (s_trm_fvar x) v)
+         s' (s_trm_null)
+
+  | step_beginv : (* removes values from the front of a begin *)
+    forall s v ts,
+    s_val v ->
+    step s (s_trm_begin (v :: ts))
+         s (s_trm_begin ts)
+        
+  | step_begin_single : (* a single term in a begin reduces to just that term *)
+    forall s t,
+    step s (s_trm_begin (t :: nil))
+         s t.
+
+
