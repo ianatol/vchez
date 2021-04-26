@@ -5,6 +5,8 @@ From TLC Require Export LibFset.
 From Coq Require Import List.
 Import ListNotations.
 
+
+(* reworking semantics with new definitions
 (*
 r6rs semantics
 use subst from definitions
@@ -251,4 +253,4 @@ Proof.
   intros. induction H0; eauto.
 Qed.
 
-
+*)

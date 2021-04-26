@@ -32,66 +32,79 @@ but are invalid lc terms
 i.e. (bvar 1) with no context
 *)
 
+Inductive ln_var : Set :=
+  | bvar (i : nat)
+  | fvar (x : var).
+
 (*source langauge pre-terms*)
 Inductive s_trm : Set :=
-  | s_trm_abs  (ts : list s_trm)
-  | s_trm_app  (t1 : s_trm)(t2 : s_trm)
+  (* non-values *)
+  | s_trm_seq  (ts : list s_trm)
   | s_trm_begin (ts : list s_trm)
   | s_trm_set (x : s_trm)(t : s_trm)
-  | s_trm_setcar (pair : s_trm)(v : s_trm)
-  | s_trm_setcdr (pair : s_trm)(v : s_trm)
-  | s_trm_cons (v1 : s_trm)(v2 : s_trm)
-  | s_trm_car (pair : s_trm)
-  | s_trm_cdr (pair : s_trm)
-  | s_trm_bvar (i : nat)
-  | s_trm_fvar (x : var)
+  | s_trm_var (x : ln_var)
+
+  (* values *)
+  | s_trm_abs (ts : list s_trm) (*binding is implicit because of debruijn indices*)
+  | s_trm_setcar 
+  | s_trm_setcdr 
+  | s_trm_cons
+  | s_trm_car 
+  | s_trm_cdr
   | s_trm_pp (n : var)
   | s_trm_num (i : nat)
   | s_trm_null
   | s_trm_true
   | s_trm_false.
 
-(* target language pre-terms*)
+(* target language pre-terms
+   add let, set! is now only on free vars *)
 Inductive t_trm : Set :=
-  | t_trm_abs  (ts : list t_trm)
-  | t_trm_app  (t1 : t_trm)(t2 : t_trm)
-  | t_trm_let (v : t_trm) (ts : list t_trm)
-  | t_trm_set_top (x : var) (t : t_trm)
+  (* non-values *)
+  | t_trm_seq (ts : list t_trm)
   | t_trm_begin (ts : list t_trm)
-  | t_trm_setcar (pair : t_trm)(v : t_trm)
-  | t_trm_setcdr (pair : t_trm)(v : t_trm)
-  | t_trm_cons (v1 : t_trm)(v2 : t_trm)
-  | t_trm_car (pair : t_trm)
-  | t_trm_cdr (pair : t_trm)
-  | t_trm_bvar (i : nat)
-  | t_trm_fvar (x : var)
+  | t_trm_set (x : t_trm) (t : t_trm)
+  | t_trm_var (x : ln_var)
+  | t_trm_let (v : t_trm) (ts : list t_trm)
+
+  (* values *)
+  | t_trm_abs  (ts : list t_trm)
+  | t_trm_setcar
+  | t_trm_setcdr
+  | t_trm_cons
+  | t_trm_car 
+  | t_trm_cdr 
   | t_trm_pp (n : var)
   | t_trm_num (i : nat)
   | t_trm_null
   | t_trm_true
   | t_trm_false.
 
-(* values in source and target languages *)
-Inductive s_val : s_trm -> Prop :=
-  | sval_abs : forall ts,
-      s_val (s_trm_abs ts)
-  | sval_pp : forall n,
-      s_val (s_trm_pp n)
-  | sval_num : forall i,
-      s_val (s_trm_num i)
-  | sval_null : s_val (s_trm_null)
-  | sval_true : s_val (s_trm_true)
-  | sval_false : s_val (s_trm_false)
+(* values in source language *)
+Inductive value : s_trm -> Prop :=
+  | val_abs : forall ts,
+      value (s_trm_abs ts)
+  | val_setcar : value (s_trm_setcar)
+  | val_setcdr : value (s_trm_setcdr)
+  | val_cons : value (s_trm_cons)
+  | val_car : value (s_trm_car)
+  | val_cdr : value (s_trm_cdr)
+  | val_pp : forall n, value (s_trm_pp n)
+  | val_num : forall i, value (s_trm_num i)
+  | sval_null : value (s_trm_null)
+  | sval_true : value (s_trm_true)
+  | sval_false : value (s_trm_false)
   
-with s_vals : list s_trm -> Prop :=
-  | s_vals_nil : s_vals([])
-  | s_vals_single : forall t, s_val t -> s_vals [t]
-  | s_vals_next : 
+with vals : list s_trm -> Prop :=
+  | vals_nil : vals([])
+  | vals_single : forall t, value t -> vals [t]
+  | vals_next : 
       forall t ts,
-        s_vals ts -> 
-        s_val t ->
-        s_vals (t :: ts).
+        vals ts -> 
+        value t ->
+        vals (t :: ts).
 
+(*
 Inductive t_val : t_trm -> Prop :=
   | tval_abs : forall ts,
       t_val (t_trm_abs ts)
@@ -102,7 +115,7 @@ Inductive t_val : t_trm -> Prop :=
   | tval_null : t_val (t_trm_null)
   | tval_true : t_val (t_trm_true)
   | tval_false : t_val (t_trm_false).
-
+*)
 
 (* 
 Opening a trm t with a trm u containing a fresh free variable x.
@@ -112,23 +125,197 @@ This means we have to keep track of the current level of abstraction with k
 So we are replacing all (bvar k) with (fvar x), and incrementing k with abstraction levels
 *)
 
+Definition open_var v k (u t : s_trm) :=
+  match v with
+  | bvar i => if (k =? i) then u else t
+  | fvar x => t
+  end.
+
 Fixpoint s_open_rec (k : nat) (u : s_trm) (t : s_trm) {struct t} : s_trm :=
   match t with
-  | s_trm_bvar i => if (k =? i) then u else t
-  | s_trm_fvar x => t
+  (* for lists of terms that don't abstract, just apply open to all terms *)
+  | s_trm_seq ts => s_trm_seq (map (s_open_rec k u) ts)
+  | s_trm_begin ts => s_trm_begin (map (s_open_rec k u) ts)
+
+  (* since lambda abstracts, add a layer of depth *)
   | s_trm_abs ts => let s_open_rec_S := (s_open_rec (S k) u) in
                     s_trm_abs (map s_open_rec_S ts)
-  | s_trm_app t1 t2 => s_trm_app (s_open_rec k u t1)(s_open_rec k u t2)
+  
+  (* for set!, just apply open to args*)
   | s_trm_set x t1 => s_trm_set (s_open_rec k u x) (s_open_rec k u t1)
-  | s_trm_setcar p v => s_trm_setcar (s_open_rec k u p) (s_open_rec k u v)
-  | s_trm_setcdr p v => s_trm_setcdr (s_open_rec k u p) (s_open_rec k u v)
-  | s_trm_cons v1 v2 => s_trm_cons (s_open_rec k u v1)(s_open_rec k u v2)
-  | s_trm_car p => s_trm_car (s_open_rec k u p)
-  | s_trm_cdr p => s_trm_cdr (s_open_rec k u p)
-  | s_trm_begin ts => let s_open_rec_S := (s_open_rec (S k) u) in
-                      s_trm_begin (map s_open_rec_S ts)
+
+  (* replace bound variables at the current level of abstraction with u *)
+  | s_trm_var v => match v with
+                   | bvar i => if (k =? i) then u else t
+                   | fvar x => t
+                   end
+  (* nothing else contains bound variables *)
   | _ => t
   end.
+
+(* open a term t with another term u at base level of abstraction *)
+Definition open t u := s_open_rec 0 u t.
+
+(* open a term t with some fvar x *)
+Notation "t ^^ x" := (open t (s_trm_var (fvar x))) (at level 67).
+
+(* open each term in a list with a fvar x*)
+Fixpoint s_open_each ts x :=
+  match ts with
+  | [] => []
+  | t :: ts' => (t ^^ x) :: s_open_each ts' x
+  end.
+
+(*
+Closing a term is the inverse of opening.
+Replaces a free var z with bvar k where k is the current level of abstraction
+*)
+Fixpoint s_close_var_rec (k : nat) (z : var) (t : s_trm) {struct t} : s_trm :=
+  match t with
+  (* seq and begin don't abstract, so just call on each term *)
+  | s_trm_seq ts => s_trm_seq (map (s_close_var_rec k z) ts)
+  | s_trm_begin ts => s_trm_begin (map (s_close_var_rec k z) ts)
+
+  (* lambda abstracts, so increment depth and then call on each term *)
+  | s_trm_abs ts => let s_close_var_rec_S := (s_close_var_rec (S k) z) in
+                    s_trm_abs (map s_close_var_rec_S ts)
+
+  (* apply close to set's variable and body *)
+  | s_trm_set x t1 => s_trm_set (s_close_var_rec k z x) (s_close_var_rec k z t1)
+
+  (* replace fvar z with bvar k *)
+  | s_trm_var v => match v with
+                   | fvar x => if var_compare x z then (s_trm_var (bvar k)) else t
+                   | bvar _ => t
+                   end
+  | _ => t
+  end.
+
+
+(* replace fvar z's in t with bound variables at their appropriate depth *)
+Definition s_close_var z t := s_close_var_rec 0 z t.
+
+(* terms are well formed (locally closed) if there are no bvars referring to invalid depth 
+   we determine this by opening all abstractions with a fresh variable
+   if there are bound vars left over, the term is not locally closed *)
+Inductive s_term : s_trm -> Prop :=
+  (* if the body of an abs is well formed after opening its terms with a fresh variable, 
+      it is well formed *)
+  | s_term_abs : forall L ts,
+      (forall x, x \notin L -> s_terms (s_open_each ts x)) ->
+      s_term (s_trm_abs ts)
+
+  (* if each term in a begin is well-formed, then it is well formed
+     don't open with a fresh variable because bvars are not allowed in a begin
+     i.e. the program (begin (bvar 0)) is NOT well formed *)
+  | s_term_begin : forall ts,
+      s_terms ts -> s_term (s_trm_begin ts)
+  
+  (* same for seq and set *)
+  | s_term_seq : forall ts,
+      s_terms ts -> s_term (s_trm_seq ts)
+
+  | s_term_set : forall b t,
+      s_term b -> s_term t -> s_term (s_trm_set b t)
+
+  (* fvars are locally closed. bvars are not!*)
+  | s_term_var : forall x,
+      s_term (s_trm_var (fvar x))
+
+  (* everything else is locally closed *)
+
+  | s_term_setcar : s_term (s_trm_setcar)
+  | s_term_setcdr : s_term (s_trm_setcdr)
+  | s_term_cons : s_term (s_trm_cons)
+  | s_term_car : s_term (s_trm_car)
+  | s_term_cdr : s_term (s_trm_cdr)
+  | s_term_pp : forall n, s_term (s_trm_pp n)
+  | s_term_num : forall i, s_term (s_trm_num i)
+  | s_term_null : s_term (s_trm_null)
+  | s_term_true : s_term (s_trm_true)
+  | s_term_false : s_term (s_trm_false)
+
+with s_terms : list s_trm -> Prop :=
+  | s_terms_nil : s_terms ([])
+  | s_terms_single : forall t, s_term t -> s_terms [t]
+  | s_terms_next : 
+      forall t ts,
+        s_terms ts -> 
+        s_term t ->
+        s_terms (t :: ts).
+
+(* Body of an abstraction *)
+Definition s_body ts :=
+  exists L, forall x, x \notin L -> s_terms (s_open_each ts x).
+
+(* Free variables of a term. Collect all fvars in a set*)
+Fixpoint s_fv (t : s_trm) : vars :=
+  let fix fvs' (ts : list s_trm) : vars :=
+    match ts with
+    | [] => \{}
+    | t :: ts' => s_fv t \u fvs' ts'
+    end
+  in
+    match t with
+    | s_trm_var v => match v with
+                     | fvar y => \{y}
+                     | bvar _ => \{}
+                     end
+    | s_trm_abs ts => fvs' ts
+    | s_trm_begin ts => fvs' ts
+    | s_trm_seq ts => fvs' ts
+    | s_trm_set x t1 => (s_fv x) \u (s_fv t1)
+    | _ => \{}
+    end.
+
+Fixpoint s_fvs ts :=
+  match ts with
+  | [] => \{}
+  | t :: ts' => s_fv t \u s_fvs ts'
+  end.
+
+Fixpoint s_subst (z : var) (u : s_trm) (t : s_trm) {struct t} : s_trm :=
+  let fix substs (ts : list s_trm) :=
+    match ts with
+    | [] => []
+    | t' :: ts' => (s_subst z u t') :: (substs ts')
+    end
+  in
+  match t with
+  | s_trm_var v => match v with
+                   | fvar x => if (var_compare x z) then u else t
+                   | bvar _ => t
+                   end
+  | s_trm_abs ts => s_trm_abs (substs ts)
+  | s_trm_begin ts => s_trm_begin (substs ts)
+  | s_trm_seq ts => s_trm_seq (substs ts)
+  | s_trm_set x t1 => s_trm_set (s_subst z u x) (s_subst z u t1)
+  | _ => t
+  end.
+
+Fixpoint s_substs z u ts :=
+  match ts with
+  | [] => []
+  | t' :: ts' => (s_subst z u t') :: (s_substs z u ts')
+  end.
+
+Notation "[ z ~> u ] t" := (s_subst z u t) (at level 68).
+
+Definition sum (l : list nat) :=
+  fold_left (plus) l 0.
+
+Fixpoint s_trm_size (t : s_trm) {struct t} : nat :=
+  match t with
+  | s_trm_abs ts => 1 + (sum (map s_trm_size ts))
+  | s_trm_begin ts => 1 + (sum (map s_trm_size ts))
+  | s_trm_seq ts => 1 + (sum (map s_trm_size ts))
+  | s_trm_set x t1 => 1 + (s_trm_size x) + (s_trm_size t1)
+  | _ => 1
+  end.
+
+
+
+(* probably not needed target language stuff 
 
 Fixpoint t_open_rec (k : nat) (u : t_trm) (t : t_trm) {struct t} : t_trm :=
   match t with
@@ -150,38 +337,13 @@ Fixpoint t_open_rec (k : nat) (u : t_trm) (t : t_trm) {struct t} : t_trm :=
   | _ => t
   end.
 
-Notation "{ k ~>s u } t" := (s_open_rec k u t) (at level 67).
 Notation "{ k ~>t u } t" := (t_open_rec k u t) (at level 67).
 
-Definition s_open t u := s_open_rec 0 u t.
 Definition t_open t u := t_open_rec 0 u t.
-
-Notation "t ^^s u" := (s_open t u) (at level 67).
-Notation "t ^s x" := (s_open t (s_trm_fvar x)) (at level 67).
 
 Notation "t ^^t u" := (t_open t u) (at level 67).
 Notation "t ^t x" := (t_open t (t_trm_fvar x)) (at level 67).
 
-(*
-Closing a term is the inverse of opening.
-Replaces a free var z with bvar n where n is the current level of abstraction
-*)
-Fixpoint s_close_var_rec (k : nat) (z : var) (t : s_trm) {struct t} : s_trm :=
-  match t with
-  | s_trm_bvar i => t
-  | s_trm_fvar x => if var_compare x z then (s_trm_bvar k) else t
-  | s_trm_abs ts => let s_close_var_rec_S := (s_close_var_rec (S k) z) in
-                  s_trm_abs (map s_close_var_rec_S ts)
-  | s_trm_app t1 t2 => s_trm_app (s_close_var_rec k z t1) (s_close_var_rec k z t2)
-  | s_trm_set x t1 => s_trm_set (s_close_var_rec k z x) (s_close_var_rec k z t1)
-  | s_trm_setcar p v => s_trm_setcar (s_close_var_rec k z p) (s_close_var_rec k z v)
-  | s_trm_setcdr p v => s_trm_setcdr (s_close_var_rec k z p) (s_close_var_rec k z v)
-  | s_trm_cons v1 v2 => s_trm_cons (s_close_var_rec k z v1) (s_close_var_rec k z v2)
-  | s_trm_car p => s_trm_car (s_close_var_rec k z p)
-  | s_trm_cdr p => s_trm_cdr (s_close_var_rec k z p)
-  | s_trm_begin ts => s_trm_begin (map (s_close_var_rec k z) ts)
-  | _ => t
-  end.
 
 Fixpoint t_close_var_rec (k : nat) (z : var) (t : t_trm) {struct t} : t_trm :=
   match t with
@@ -199,14 +361,8 @@ Fixpoint t_close_var_rec (k : nat) (z : var) (t : t_trm) {struct t} : t_trm :=
   | _ => t
   end.
 
-Definition s_close_var z t := s_close_var_rec 0 z t.
-Definition t_close_var z t := t_close_var_rec 0 z t.
 
-Fixpoint s_open_each ts x :=
-  match ts with
-  | [] => []
-  | t :: ts' => (t ^s x) :: s_open_each ts' x
-  end.
+Definition t_close_var z t := t_close_var_rec 0 z t.
 
 Fixpoint t_open_each ts x :=
   match ts with
@@ -214,60 +370,11 @@ Fixpoint t_open_each ts x :=
   | t :: ts' => (t ^t x) :: t_open_each ts' x
   end.
 
-Fixpoint s_open_each_term ts u :=
-  match ts with
-  | [] => []
-  | t :: ts' => (t ^^s u) :: s_open_each_term ts' u
-  end.
-  
 Fixpoint t_open_each_term ts u :=
   match ts with
   | [] => []
   | t :: ts' => (t ^^s u) :: t_open_each_term ts' u
   end.
-
-
-(* terms are locally closed - that is, they *)
-Inductive s_term : s_trm -> Prop :=
-  | s_term_fvar : forall x,
-      s_term (s_trm_fvar x)
-  | s_term_app : forall t1 t2,
-      s_term t1 -> s_term t2 -> s_term (s_trm_app t1 t2)
-  | s_term_abs : forall L ts,
-      (forall x, x \notin L -> s_terms (s_open_each ts x)) ->
-      s_term (s_trm_abs ts)
-  | s_term_begin : forall L ts,
-      (forall x, x \notin L -> s_terms (s_open_each ts x)) ->
-      s_term (s_trm_begin ts)
-  | s_term_set : forall b t,
-      s_term b -> s_term t -> s_term (s_trm_set b t)
-  | s_term_setcar : forall p v,
-      s_term p -> s_term v -> s_term (s_trm_setcar p v)
-  | s_term_setcdr : forall p v,
-      s_term p -> s_term v -> s_term (s_trm_setcdr p v)
-  | s_term_cons : forall v1 v2, 
-      s_term v1 -> s_term v2 -> s_term (s_trm_cons v1 v2)
-  | s_term_car : forall p,
-      s_term p -> s_term (s_trm_car p)
-  | s_term_cdr : forall p,
-      s_term p -> s_term (s_trm_cdr p)
-  | s_term_pp : forall n,
-      s_term (s_trm_pp n)
-  | s_term_num : forall i,
-      s_term (s_trm_num i)
-  | s_term_null : s_term (s_trm_null)
-  | s_term_true : s_term (s_trm_true)
-  | s_term_false : s_term (s_trm_false)
-
-with s_terms : list s_trm -> Prop :=
-  | s_terms_nil : s_terms ([])
-  | s_terms_single : forall t, s_term t -> s_terms [t]
-  | s_terms_next : 
-      forall t ts,
-        s_terms ts -> 
-        s_term t ->
-        s_terms (t :: ts).
-
 
 Inductive t_term : t_trm -> Prop :=
   | t_term_fvar : forall x,
@@ -312,44 +419,9 @@ with t_terms : list t_trm -> Prop :=
         t_term t ->
         t_terms (t :: ts).
 
-
-(* Body of an abstraction *)
-Definition s_body ts :=
-  exists L,
-  forall x, x \notin L -> s_terms (s_open_each ts x).
-
 Definition t_body ts :=
   exists L,
   forall x, x \notin L -> t_terms (t_open_each ts x).
-
-(* Free variables of a source term *)
-Fixpoint s_fv (t : s_trm) : vars :=
-  let fix fvs' (ts : list s_trm) : vars :=
-    match ts with
-    | [] => \{}
-    | t :: ts' => s_fv t \u fvs' ts'
-    end
-  in
-    match t with
-    | s_trm_fvar y => \{y}
-    | s_trm_bvar _ => \{}
-    | s_trm_abs ts => fvs' ts
-    | s_trm_begin ts => fvs' ts
-    | s_trm_app t1 t2 => (s_fv t1) \u (s_fv t2)
-    | s_trm_set x t1 => (s_fv x) \u (s_fv t1)
-    | s_trm_setcar p v => (s_fv p) \u (s_fv v)
-    | s_trm_setcdr p v => (s_fv p) \u (s_fv v)
-    | s_trm_cons v1 v2 => (s_fv v1) \u (s_fv v2)
-    | s_trm_car p => s_fv p
-    | s_trm_cdr p => s_fv p
-    | _ => \{}
-    end.
-
-Fixpoint s_fvs ts :=
-  match ts with
-  | [] => \{}
-  | t :: ts' => s_fv t \u s_fvs ts'
-  end.
 
 Fixpoint t_fv (t : t_trm) : vars :=
   let fix fvs' (ts : list t_trm) : vars :=
@@ -373,34 +445,6 @@ Fixpoint t_fv (t : t_trm) : vars :=
     | _ => \{}
     end.
 
-Fixpoint s_subst (z : var) (u : s_trm) (t : s_trm) {struct t} : s_trm :=
-  let fix substs (ts : list s_trm) :=
-    match ts with
-    | [] => []
-    | t' :: ts' => (s_subst z u t') :: (substs ts')
-    end
-  in
-  match t with
-  | s_trm_abs ts => s_trm_abs (substs ts)
-  | s_trm_begin ts => s_trm_begin (substs ts)
-  | s_trm_app t1 t2 => s_trm_app (s_subst z u t1) (s_subst z u t2)
-  | s_trm_set x t1 => s_trm_set (s_subst z u x) (s_subst z u t1)
-  | s_trm_setcar p v => s_trm_setcar (s_subst z u p) (s_subst z u v)
-  | s_trm_setcdr p v => s_trm_setcdr (s_subst z u p) (s_subst z u v)
-  | s_trm_cons v1 v2 => s_trm_cons (s_subst z u v1) (s_subst z u v2)
-  | s_trm_car p => s_trm_car (s_subst z u p)
-  | s_trm_cdr p => s_trm_cdr (s_subst z u p)
-  | s_trm_fvar x => if (var_compare x z) then u else t
-  | s_trm_bvar i => t
-  | _ => t
-  end.
-
-Fixpoint s_substs z u ts :=
-  match ts with
-  | [] => []
-  | t' :: ts' => (s_subst z u t') :: (s_substs z u ts')
-  end.
-
 Fixpoint t_subst (z : var) (u : t_trm) (t : t_trm) {struct t} : t_trm :=
   let fix substs (ts : list t_trm) :=
     match ts with
@@ -423,27 +467,7 @@ Fixpoint t_subst (z : var) (u : t_trm) (t : t_trm) {struct t} : t_trm :=
   | _ => t
   end.
 
-Notation "[ z ~>s u ] t" := (s_subst z u t) (at level 68).
 Notation "[ z ~>t u ] t" := (t_subst z u t) (at level 68).
-
-Definition sum (l : list nat) :=
-  fold_left (plus) l 0.
-
-Fixpoint s_trm_size (t : s_trm) {struct t} : nat :=
-  match t with
-  | s_trm_abs ts => 1 + (sum (map s_trm_size ts))
-  | s_trm_begin ts => 1 + (sum (map s_trm_size ts))
-  | s_trm_app t1 t2 => 1 + (s_trm_size t1) + (s_trm_size t2)
-  | s_trm_set x t1 => 1 + (s_trm_size x) + (s_trm_size t1)
-  | s_trm_setcar p v => 1 + (s_trm_size p) + (s_trm_size v)
-  | s_trm_setcdr p v => 1 + (s_trm_size p) + (s_trm_size v)
-  | s_trm_cons v1 v2 => 1 + (s_trm_size v1) + (s_trm_size v2)
-  | s_trm_car p => 1 + (s_trm_size p)
-  | s_trm_cdr p => 1 + (s_trm_size p)
-  | s_trm_fvar _ => 1
-  | s_trm_bvar _ => 1
-  | _ => 1
-  end.
 
 Fixpoint t_trm_size (t : t_trm) {struct t} : nat :=
   match t with 
@@ -461,3 +485,5 @@ Fixpoint t_trm_size (t : t_trm) {struct t} : nat :=
   | t_trm_bvar _ => 1
   | _ => 1
   end.
+
+*)

@@ -5,6 +5,7 @@ From Coq Require Import List.
 Import ListNotations.
 Import Nat.
 
+(* reworking pass with new definitions
 (* 
 Defines the np-convert-assignments pass, which converts s_trm to t_trm,
 as well as a pass that desugars t_trm by converting lets into lambda applications
@@ -211,4 +212,4 @@ Definition ca t :=
 
 Definition desugar t :=
   de_sugar big_num t.
-  
+*)
