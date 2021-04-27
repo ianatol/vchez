@@ -20,10 +20,11 @@ Proof.
 Hint Resolve s_term_abs_to_body  
              s_body_to_term_abs.
 
-Lemma s_subst_id : forall t x u,
-  x \notin s_fv t -> s_subst x u t = t.
-Proof. Abort. 
+Check s_trm_ind.
 
+Lemma s_subst_id : forall t x u,
+  x \notin s_fv t -> [x ~> u]t = t.
+Proof. Abort.
 
      
     

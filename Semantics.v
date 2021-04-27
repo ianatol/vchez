@@ -1,11 +1,9 @@
-From vchez Require Export Definitions.
+From vchez Require Import Definitions.
 From vchez Require Export Helpers.
-From TLC Require Export LibVar.
-From TLC Require Export LibFset.
 From Coq Require Import List.
 Import ListNotations.
-
-
+From Metalib Require Import CoqFSetInterface.
+From Metalib Require Export Metatheory.
 (*
 r6rs semantics
 use subst from definitions
@@ -22,8 +20,8 @@ Fixpoint get_sf_vars sfs :=
   match sfs with
   | nil => empty
   | sf :: sfs' => match sf with 
-                  | store_val x v => \{x} \u (get_sf_vars sfs')
-                  | store_bh x => \{x} \u (get_sf_vars sfs')
+                  | store_val x v => {{x}} \u (get_sf_vars sfs')
+                  | store_bh x => {{x}} \u (get_sf_vars sfs')
                   | store_cons _ _ _ => get_sf_vars sfs'
                   end
   end.
@@ -32,7 +30,7 @@ Fixpoint get_sf_pps sfs :=
   match sfs with
   | nil => empty
   | sf :: sfs' => match sf with
-                  | store_cons pp _ _ => \{pp} \u (get_sf_pps sfs')
+                  | store_cons pp _ _ => {{pp}} \u (get_sf_pps sfs')
                   | _ => get_sf_pps sfs'
                   end
   end.
@@ -41,10 +39,10 @@ Fixpoint get_val x sfs :=
   match sfs with 
   | nil => NoneE "Var not in store"
   | sf :: sfs' => match sf with
-                  | store_val y v => if (var_compare x y) 
+                  | store_val y v => if (x == y) 
                                      then SomeE v 
                                      else get_val x sfs'
-                  | store_bh y => if (var_compare x y) 
+                  | store_bh y => if (x == y) 
                                   then NoneE "Tried to access bh value" 
                                   else get_val x sfs'
                   | store_cons _ _ _ => get_val x sfs'
@@ -55,30 +53,32 @@ Fixpoint get_pair pp sfs :=
   match sfs with 
   | nil => NoneE "Pair pointer not in store"
   | sf :: sfs' => match sf with
-                  | store_cons pp' v1 v2 => if (var_compare pp pp')
+                  | store_cons pp' v1 v2 => if (pp == pp')
                                            then SomeE (v1, v2)
                                            else get_pair pp sfs'
                   | _ => get_pair pp sfs'
                   end
   end.
 
-Definition get_fresh sfs t :=
-  var_gen ((get_sf_vars sfs) \u (s_fv t)).
+Definition get_fresh (sfs : list sf) (t : s_trm) : var.
+  atom_fresh ((get_sf_vars sfs) \u (s_fv t)).
 
 Definition get_fresh_pp sfs :=
-  var_gen (get_sf_pps sfs).
+  match atom_fresh (get_sf_pps sfs) with
+  | a => a
+  end.
 
 Definition get_fresh_list sfs ts :=
-  var_gen ((get_sf_vars sfs) \u (s_fvs ts)).
+  atom_fresh ((get_sf_vars sfs) \u (s_fvs ts)).
 
 Fixpoint update_sf_var sfs x v :=
   match sfs with 
   | nil => sfs
   | sf :: sfs' => match sf with
-                  | store_val y _ => if (var_compare x y) 
+                  | store_val y _ => if (x == y) 
                                      then (store_val y v :: sfs')
                                      else sf :: (update_sf_var sfs' x v)
-                  | store_bh y => if (var_compare x y) 
+                  | store_bh y => if (x == y) 
                                      then (store_val y v :: sfs')
                                      else sf :: (update_sf_var sfs' x v)
                   | store_cons _ _ _ => sf :: (update_sf_var sfs' x v)
@@ -90,7 +90,7 @@ Fixpoint update_sf_pp_car sfs pp v :=
   match sfs with 
   | nil => sfs
   | sf :: sfs' => match sf with
-                  | store_cons pp' v1 v2 => if (var_compare pp pp')
+                  | store_cons pp' v1 v2 => if (pp == pp')
                                             then ((store_cons pp v v2) :: sfs')
                                             else sf :: (update_sf_pp_car sfs' pp v)
                   | _ => sf :: (update_sf_pp_car sfs' pp v)
@@ -101,7 +101,7 @@ Fixpoint update_sf_pp_cdr sfs pp v :=
   match sfs with 
   | nil => sfs
   | sf :: sfs' => match sf with
-                  | store_cons pp' v1 v2 => if (var_compare pp pp')
+                  | store_cons pp' v1 v2 => if (pp == pp')
                                             then ((store_cons pp v1 v) :: sfs')
                                             else sf :: (update_sf_pp_cdr sfs' pp v)
                   | _ => sf :: (update_sf_pp_cdr sfs' pp v)
@@ -145,10 +145,7 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
     forall s v ts x, value v -> s_terms ts -> x \notin ((get_sf_vars s) \u (s_fvs ts)) ->
     step s ` ((s_trm_abs ts) ; v)
          s (s_trm_begin 
-             (s_substs 
-               x
-               v
-               (s_open_each ts x)))
+             (open_each ts v))
 
   | step_var : (* get a variable's value from store *)
     forall s x v,

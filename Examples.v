@@ -3,7 +3,6 @@ From vchez Require Export Pass.
 From vchez Require Export Semantics.
 From vchez Require Import Helpers.
 From TLC Require Import LibTactics.
-From Coq Require Import ssreflect.
 
 From Coq Require Import List.
 Import ListNotations.
@@ -11,13 +10,27 @@ Import ListNotations.
 
 (*Semantics examples*)
 
-Example sem1 : forall sfs,
-  multi_step sfs ` (s_trm_car ; ` (s_trm_cons ; s_trm_true ; s_trm_false))
-             sfs (s_trm_true).
+Example sem1 : forall sfs v1 v2 pp,
+  value v1 -> value v2 ->
+  pp = get_fresh_pp sfs ->
+  multi_step sfs ` (s_trm_car ; ` (s_trm_cons ; v1 ; v2))
+             ((store_cons pp v1 v2) :: sfs) v1.
 Proof.
   intros.
-  lets D: steps_context (ECApp s_trm_car).
-  eapply val_car.
+  eapply mstep_trans.
+  (* first step *)
+    apply mstep_one. 
+    lets D1: step_ctx (ECApp s_trm_car (val_car)).
+    eapply D1.
+    apply step_cons_store; try assumption.
+    eapply H1.
+  (* second step *)
+  apply mstep_one.
+  apply step_car with (v1 := v1) (v2 := v2).
+  
+
+
+    
 Abort.
 
 (*
