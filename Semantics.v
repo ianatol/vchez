@@ -115,10 +115,9 @@ Inductive eval_ctx : (s_trm -> s_trm) -> Prop :=
   | ECHole : eval_ctx (fun E => E)
   | ECSet : forall x, eval_ctx (fun E => s_trm_set x E)
   | ECBegin : forall t ts, eval_ctx (fun E => s_trm_begin (E :: (t :: ts)))
-  | ECApp : forall v1 v2,
+  | ECApp : forall v1,
             value v1 -> 
-            value v2 ->
-            eval_ctx (fun E => ` ( v1 ; E ; v2 )).
+            eval_ctx (fun E => ` ( v1 ; E )).
 
 Hint Constructors eval_ctx.
 
@@ -133,7 +132,7 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
     step s (C e)  s' (C e') (* implies the step applies inside a context *)
 
   | step_mark1 : (* pull right term out of an application into a lambda for eval *)
-    forall s e1 e2, s_term e1 -> s_term e2 ->
+    forall s e1 e2, s_term e1 -> s_term e2 -> ~ (value e1) -> ~ (value e2) -> 
     step s ` (e1 ; e2) (* (e1 e2)*)
          s ` ((s_trm_abs [` ( e1 ; (s_trm_var (bvar 0)))]) ; e2) (* ((lam (e1 0) e2) *)
   

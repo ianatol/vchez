@@ -2,20 +2,25 @@ From vchez Require Export Definitions.
 From vchez Require Export Pass.
 From vchez Require Export Semantics.
 From vchez Require Import Helpers.
+From TLC Require Import LibTactics.
+From Coq Require Import ssreflect.
 
 From Coq Require Import List.
 Import ListNotations.
 
-(* reworking examples with new syntax 
+
 (*Semantics examples*)
 
 Example sem1 : forall sfs,
-  multi_step sfs (s_trm_car (s_trm_cons s_trm_true s_trm_false))
+  multi_step sfs ` (s_trm_car ; ` (s_trm_cons ; s_trm_true ; s_trm_false))
              sfs (s_trm_true).
 Proof.
-  intros. repeat constructor.
+  intros.
+  lets D: steps_context (ECApp s_trm_car).
+  eapply val_car.
+Abort.
 
-
+(*
 (* Examples of the convert-assignments pass working as intended *)
 
 Example ca_1 : forall x,
@@ -42,5 +47,4 @@ Example ca_6 :
                t_trm_car (t_trm_bvar 0)]])
           t_trm_false).
 Proof. reflexivity. Qed.
-
 *)
