@@ -57,13 +57,16 @@ Inductive s_trm : Set :=
   | s_trm_true
   | s_trm_false.
 
+Notation "` ( t ) " := (s_trm_seq [t]).
+Notation "` ( t1 ; t2 ; .. ; t3 )" := (s_trm_seq (cons t1 (cons t2 .. (cons t3 nil) ..))).
+
 (* target language pre-terms
-   add let, set! is now only on free vars *)
+   add let, set! is now only on free vars, so call it set_top *)
 Inductive t_trm : Set :=
   (* non-values *)
   | t_trm_seq (ts : list t_trm)
   | t_trm_begin (ts : list t_trm)
-  | t_trm_set (x : t_trm) (t : t_trm)
+  | t_trm_set_top (x : t_trm) (t : t_trm)
   | t_trm_var (x : ln_var)
   | t_trm_let (v : t_trm) (ts : list t_trm)
 
@@ -79,6 +82,10 @@ Inductive t_trm : Set :=
   | t_trm_null
   | t_trm_true
   | t_trm_false.
+
+Notation "$ { t } " := (t_trm_seq [t]).
+Notation "$ { t1 ; t2 ; .. ; t3 }" := (t_trm_seq (cons t1 (cons t2 .. (cons t3 nil) ..))).
+  
 
 (* values in source language *)
 Inductive value : s_trm -> Prop :=
