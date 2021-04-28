@@ -1,13 +1,12 @@
 From vchez Require Import Definitions.
-From vchez Require Export Helpers.
+From vchez Require Import Helpers.
 From Coq Require Import List.
+From Coq Require Import FSets.FSets.
+From Metalib Require Import Metatheory.
+From Metalib Require Import MetatheoryAtom.
+Import Atom.
 Import ListNotations.
-From Metalib Require Import CoqFSetInterface.
-From Metalib Require Export Metatheory.
-(*
-r6rs semantics
-use subst from definitions
-*)
+
 
 Inductive sf : Set :=
   | store_val (x : var) (v : s_trm)
@@ -60,16 +59,39 @@ Fixpoint get_pair pp sfs :=
                   end
   end.
 
-Definition get_fresh (sfs : list sf) (t : s_trm) : var.
-  atom_fresh ((get_sf_vars sfs) \u (s_fv t)).
 
-Definition get_fresh_pp sfs :=
-  match atom_fresh (get_sf_pps sfs) with
-  | a => a
+Ltac gather_vars :=
+  let A := gather_vars_with (fun x : vars => x) in
+  let B := gather_vars_with (fun x : var => {{ x }}) in
+  let C := gather_vars_with (fun x : s_trm => s_fv x) in
+  let D := gather_vars_with (fun x : sfs => get_sf_vars x) in
+  constr:(A \u B \u C \u D).
+
+
+Tactic Notation "pick_fresh" ident(x) :=
+  let L := gather_vars in pick_fresh_gen L x.
+Tactic Notation "pick_fresh" ident(x) "from" constr(E) :=
+  let L := gather_vars in pick_fresh_gen (L \u E) x.
+
+Tactic Notation "apply_fresh" constr(T) "as" ident(x) :=
+  apply_fresh_base T gather_vars x.
+
+Hint Constructors s_term.
+
+Definition get_fresh (sfs : list sf) (t : s_trm) : var :=
+  match atom_fresh ((get_sf_vars sfs) \u (s_fv t)) with
+    (exist _ x _) => x
   end.
 
 Definition get_fresh_list sfs ts :=
-  atom_fresh ((get_sf_vars sfs) \u (s_fvs ts)).
+  match atom_fresh ((get_sf_vars sfs) \u (s_fvs ts)) with
+    (exist _ x _ ) => x
+  end.
+  
+Definition get_fresh_pp sfs :=
+  match atom_fresh (get_sf_pps sfs) with
+    (exist _ x _ ) => x
+  end.
 
 Fixpoint update_sf_var sfs x v :=
   match sfs with 
@@ -174,7 +196,7 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
 
   | step_cons_store : (* puts a cons into store *)
     forall s v1 v2 pp, value v1 -> value v2 ->
-    pp = get_fresh_pp s ->
+    pp = get_fresh_pp s -> 
     step s ` (s_trm_cons ; v1 ; v2)
          ((store_cons pp v1 v2) :: s) (s_trm_pp pp)
 
