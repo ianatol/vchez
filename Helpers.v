@@ -1,4 +1,4 @@
-From Coq Require Export Strings.String.
+From Coq Require Import Strings.String.
 
 Inductive OptionE (X : Type) : Type :=
 | SomeE (x : X)

@@ -1,6 +1,7 @@
 From vchez Require Import Definitions.
 From vchez Require Import Helpers.
 From Coq Require Import List.
+From Coq Require Import Strings.String.
 From Metalib Require Import Metatheory.
 From Metalib Require Import MetatheoryAtom.
 Import ListNotations.
@@ -161,7 +162,7 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
          s ` ((s_trm_abs [` ((s_trm_var (bvar 0)) ; v)]) ; e) (* ((lam (0 v)) e)*)
     
   | step_app : (* lambda and a value -> do subst *)
-    forall s v ts x, value v -> s_terms ts -> x \notin ((get_sf_vars s) \u (s_fvs ts)) ->
+    forall s v ts, value v -> s_term (s_trm_abs ts) ->
     step s ` ((s_trm_abs ts) ; v)
          s (s_trm_begin 
              (open_each ts v))
@@ -206,7 +207,7 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
   | step_cdr :
     forall s pp v1 v2,
     get_pair pp s = SomeE (v1, v2) ->
-    step s ` (s_trm_car ; (s_trm_pp pp))
+    step s ` (s_trm_cdr ; (s_trm_pp pp))
          s v2
     
   | step_setcar :

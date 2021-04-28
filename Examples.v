@@ -8,9 +8,12 @@ From Metalib Require Import LibTactics.
 Import ListNotations.
 
 
+Tactic Notation "next_step" :=
+  eapply mstep_trans; apply mstep_one.
+
 (*Semantics examples*)
 
-Example sem1 : forall sfs v1 v2 pp,
+Lemma car_cons : forall sfs v1 v2 pp,
   value v1 -> value v2 ->
   pp = get_fresh_pp sfs ->
   multi_step sfs ` (s_trm_car ; ` (s_trm_cons ; v1 ; v2))
@@ -30,15 +33,64 @@ Proof.
   simpl. rewrite eq_dec_refl. reflexivity.
 Qed.
 
-Example sem2 : forall sfs pp,
+Lemma cdr_cons : forall sfs v1 v2 pp,
+  value v1 -> value v2 ->
+  pp = get_fresh_pp sfs ->
+  multi_step sfs ` (s_trm_cdr ; ` (s_trm_cons ; v1 ; v2))
+             ((store_cons pp v1 v2) :: sfs) v2.
+Proof.
+  intros.
+  eapply mstep_trans.
+    lets D1 : step_ctx (ECApp s_trm_cdr (val_cdr)).
+    apply mstep_one.
+    apply D1.
+    apply step_cons_store; try assumption. apply H1.
+  apply mstep_one.
+  apply step_cdr with (v1 := v1) (v2 := v2).
+  simpl. rewrite eq_dec_refl. reflexivity.
+Qed.
+
+Lemma bvar_carbvar : forall C sfs v pp,
+  eval_ctx C -> value v -> pp = get_fresh_pp sfs ->
+   multi_step sfs (C ` ((s_trm_abs [` (s_trm_car ; s_trm_var (bvar 0))]) ; ` (s_trm_cons ; v ; s_trm_null)))
+              ((store_cons pp v s_trm_null) :: sfs) (C v).
+Proof.
+  intros.
+  eapply mstep_trans.
+    lets D1 : step_ctx (ECApp (s_trm_abs [` (s_trm_car; s_trm_var (bvar 0))]) (val_abs [` (s_trm_car; s_trm_var (bvar 0))])).
+    apply mstep_one.
+    apply step_ctx with (C := C). apply H.
+    apply D1.
+      apply step_cons_store; try assumption. apply val_null. apply H1.
+  eapply mstep_trans.
+    apply mstep_one.
+    apply step_ctx with (C := C). apply H.
+    apply step_app; try repeat constructor.
+      apply s_term_abs with (L := s_fv (s_trm_abs [` (s_trm_car; s_trm_var (bvar 0))])).
+      intros.
+      compute. try repeat constructor.
+  eapply mstep_trans.
+    apply mstep_one.
+    simpl. apply step_ctx with (C := C). apply H.
+    apply step_begin_single.
+  eapply mstep_trans.
+    apply mstep_one.
+    compute.
+    apply step_ctx with (C := C). apply H.
+    apply step_car with (v2 := s_trm_null).
+    simpl. rewrite eq_dec_refl. reflexivity.
+  apply mstep_none.
+Qed.
+
+Example sem1 : forall sfs pp,
   pp = get_fresh_pp sfs ->
   multi_step sfs ` (s_trm_car ; ` (s_trm_cons ; s_trm_true ; s_trm_null)) 
              ((store_cons pp s_trm_true s_trm_null) :: sfs) s_trm_true.
 Proof.
   intros. 
-  apply sem1; try constructor; assumption.
+  apply car_cons; try constructor; assumption.
 Qed.
-  
+
 (*
 (* Examples of the convert-assignments pass working as intended *)
 
