@@ -1,12 +1,9 @@
 From vchez Require Import Definitions.
 From vchez Require Import Helpers.
 From Coq Require Import List.
-From Coq Require Import FSets.FSets.
 From Metalib Require Import Metatheory.
 From Metalib Require Import MetatheoryAtom.
-Import Atom.
 Import ListNotations.
-
 
 Inductive sf : Set :=
   | store_val (x : var) (v : s_trm)
@@ -243,6 +240,7 @@ Inductive multi_step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
 
 Hint Constructors multi_step.
 
+
 Lemma steps_context :
   forall C s e s' e',
   eval_ctx C ->
@@ -251,3 +249,12 @@ Lemma steps_context :
 Proof.
   intros. induction H0; eauto.
 Qed.
+
+Inductive eval : s_trm -> s_trm -> Prop :=
+  | eval_val : forall t1, value t1 -> eval t1 t1
+
+  | eval_step : forall s1 t1 s2 t2,
+    value t2 ->
+    multi_step s1 t1 s2 t2 ->
+    eval t1 t2.
+  

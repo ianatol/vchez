@@ -69,9 +69,9 @@ Inductive value : s_trm -> Prop :=
   | val_cdr : value (s_trm_cdr)
   | val_pp : forall n, value (s_trm_pp n)
   | val_num : forall i, value (s_trm_num i)
-  | sval_null : value (s_trm_null)
-  | sval_true : value (s_trm_true)
-  | sval_false : value (s_trm_false)
+  | val_null : value (s_trm_null)
+  | val_true : value (s_trm_true)
+  | val_false : value (s_trm_false)
   
 with vals : list s_trm -> Prop :=
   | vals_nil : vals([])

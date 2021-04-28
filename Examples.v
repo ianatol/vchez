@@ -1,10 +1,10 @@
-From vchez Require Export Definitions.
-From vchez Require Export Pass.
-From vchez Require Export Semantics.
+From vchez Require Import Definitions.
+From vchez Require Import Pass.
+From vchez Require Import Semantics.
 From vchez Require Import Helpers.
-From TLC Require Import LibTactics.
-
 From Coq Require Import List.
+From TLC Require Import LibTactics.
+From Metalib Require Import LibTactics.
 Import ListNotations.
 
 
@@ -19,15 +19,25 @@ Proof.
   intros.
   eapply mstep_trans.
   (* first step *)
-    apply mstep_one. 
     lets D1: step_ctx (ECApp s_trm_car (val_car)).
+    apply mstep_one. 
     eapply D1.
     apply step_cons_store; try assumption.
     eapply H1.
   (* second step *)
   apply mstep_one.
   apply step_car with (v1 := v1) (v2 := v2).
-  simpl. subst. unfold get_fresh_pp. Abort. 
+  simpl. rewrite eq_dec_refl. reflexivity.
+Qed.
+
+Example sem2 : forall sfs pp,
+  pp = get_fresh_pp sfs ->
+  multi_step sfs ` (s_trm_car ; ` (s_trm_cons ; s_trm_true ; s_trm_null)) 
+             ((store_cons pp s_trm_true s_trm_null) :: sfs) s_trm_true.
+Proof.
+  intros. 
+  apply sem1; try constructor; assumption.
+Qed.
   
 (*
 (* Examples of the convert-assignments pass working as intended *)
