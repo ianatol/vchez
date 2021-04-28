@@ -27,12 +27,8 @@ Proof.
   (* second step *)
   apply mstep_one.
   apply step_car with (v1 := v1) (v2 := v2).
+  simpl. subst. unfold get_fresh_pp. Abort. 
   
-
-
-    
-Abort.
-
 (*
 (* Examples of the convert-assignments pass working as intended *)
 
