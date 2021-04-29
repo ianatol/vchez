@@ -1,5 +1,5 @@
 From vchez Require Import Definitions.
-From vchez Require Import Pass.
+From vchez Require Export Pass.
 From vchez Require Import Semantics.
 From vchez Require Import Helpers.
 From Coq Require Import List.

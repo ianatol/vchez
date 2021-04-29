@@ -1,5 +1,5 @@
 From vchez Require Import Definitions.
-From vchez Require Import Helpers.
+From vchez Require Export Helpers.
 From Coq Require Import List.
 From Coq Require Import Strings.String.
 From Metalib Require Import Metatheory.
@@ -151,15 +151,17 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
     step s e   s' e' -> (* a step outside of a context *)
     step s (C e)  s' (C e') (* implies the step applies inside a context *)
 
-  | step_mark1 : (* pull right term out of an application into a lambda for eval *)
-    forall s e1 e2, s_term e1 -> s_term e2 -> ~ (value e1) -> ~ (value e2) -> 
-    step s ` (e1 ; e2) (* (e1 e2)*)
-         s ` ((s_trm_abs [` ( e1 ; (s_trm_var (bvar 0)))]) ; e2) (* ((lam (e1 0) e2) *)
+  | step_mark1 : (* pull left terms out of a sequence into a lambda for eval *)
+    forall s e es, s_term e -> s_terms es -> ~ (value e) ->
+    step s (s_trm_seq (e :: es)) (* (e es ...)*)
+         s (s_trm_seq 
+             [(s_trm_abs [(s_trm_seq ((s_trm_var (bvar 0)) :: es))]) ; e]) (* ((lam (0 es ...) e) *)
   
-  | step_mark2 : (* if right term is already a value, pull left term out *)
-    forall s v e, value v -> s_term e ->
-    step s ` (e ; v) (* (e v) *)
-         s ` ((s_trm_abs [` ((s_trm_var (bvar 0)) ; v)]) ; e) (* ((lam (0 v)) e)*)
+  | step_mark2 : (* if term is surrounded by values, pull it out *)
+    forall s vs1 vs2 e, vals vs1 -> vals vs2 -> s_term e ->
+    step s (s_trm_seq (vs1 ++ [e] ++ vs2)) (* (vs1 ... e vs2 ...) *)
+         s (s_trm_seq 
+             [(s_trm_abs [s_trm_seq (vs1 ++ [s_trm_var (bvar 0)] ++ vs2)]) ; e])  (* ( (lam (vs1 ... 0 vs2 ...)) e) *)
     
   | step_app : (* lambda and a value -> do subst *)
     forall s v ts, value v -> s_term (s_trm_abs ts) ->
@@ -258,4 +260,30 @@ Inductive eval : s_trm -> s_trm -> Prop :=
     value t2 ->
     multi_step s1 t1 s2 t2 ->
     eval t1 t2.
+
+Inductive vsr : sfs -> s_trm -> Prop :=
+  | vsr_val : forall s t, value t -> vsr s t
+  | vsr_stuck : forall s t, ~ (exists s' t', step s t s' t') -> vsr s t
+  | vsr_reducible : forall C s t,
+                    eval_ctx C ->
+                    (exists s' t', step s t s' t') -> 
+                    vsr s (C t).
+
+Theorem vsr_preserve :
+  forall s t,
+  vsr s t -> 
+  exists s' t', step s t s' t' ->
+  vsr s' t.
+Proof.
+  intros. induction t; simpl.
+
+
   
+Theorem step_progress :
+  forall s t, s_term t -> value t \/ (exists s' t', step s t s' t').
+Proof.
+  intros. induction t; try (left; constructor); right.
+  - destruct ts.  
+  Abort.
+  - (* t = s_trm_seq ts *)
+    

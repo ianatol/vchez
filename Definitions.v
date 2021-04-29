@@ -58,6 +58,39 @@ Inductive s_trm : Set :=
 Notation "` ( t ) " := (s_trm_seq [t]).
 Notation "` ( t1 ; t2 ; .. ; t3 )" := (s_trm_seq (cons t1 (cons t2 .. (cons t3 nil) ..))).
 
+Theorem s_trm_mutind
+ : forall 
+    (P : s_trm -> Prop),
+    (forall x , P (s_trm_var x)) ->
+    (forall x t, P x -> P t -> P(s_trm_set x t)) -> 
+    (forall ts, Forall P ts -> P (s_trm_seq ts)) ->
+    (forall ts, Forall P ts -> P (s_trm_begin ts)) ->
+    (forall ts, Forall P ts -> P (s_trm_abs ts)) ->
+    (forall n : atom, P (s_trm_pp n)) ->
+    (forall i : nat, P (s_trm_num i)) ->
+    P s_trm_setcar ->
+    P s_trm_setcdr ->
+    P s_trm_cons ->
+    P s_trm_car ->
+    P s_trm_cdr ->
+    P s_trm_null -> 
+    P s_trm_true -> 
+    P s_trm_false -> 
+    forall s : s_trm, P s.
+Proof.
+  intro P.
+  intros var set seq begin abs pp num setcar setcdr cons car cdr null true false.
+  refine (fix IH t : P t := _).
+  case t; intros; try assumption.
+  - apply seq. induction ts; intuition.
+  - apply begin. induction ts; intuition.
+  - apply set. apply IH. apply IH.
+  - apply var.
+  - apply abs. induction ts; intuition.
+  - apply pp.
+  - apply num.
+Qed.
+
 (* values in source language *)
 Inductive value : s_trm -> Prop :=
   | val_abs : forall ts,
