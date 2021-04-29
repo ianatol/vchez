@@ -13,44 +13,48 @@ Tactic Notation "next_step" :=
 
 (*Semantics examples*)
 
-Lemma car_cons : forall sfs v1 v2 pp,
-  value v1 -> value v2 ->
+Lemma car_cons : forall sfs v1 v2 pp C,
+  eval_ctx C -> value v1 -> value v2 ->
   pp = get_fresh_pp sfs ->
-  multi_step sfs ` (s_trm_car ; ` (s_trm_cons ; v1 ; v2))
-             ((store_cons pp v1 v2) :: sfs) v1.
+  multi_step sfs (C ` (s_trm_car ; ` (s_trm_cons ; v1 ; v2)))
+             ((store_cons pp v1 v2) :: sfs) (C v1).
 Proof.
   intros.
   eapply mstep_trans.
   (* first step *)
     lets D1: step_ctx (ECApp s_trm_car (val_car)).
-    apply mstep_one. 
+    apply mstep_one.
+    apply step_ctx with (C := C). apply H. 
     eapply D1.
     apply step_cons_store; try assumption.
-    eapply H1.
+    apply H2.
   (* second step *)
   apply mstep_one.
+  apply step_ctx with (C := C). apply H. 
   apply step_car with (v1 := v1) (v2 := v2).
   simpl. rewrite eq_dec_refl. reflexivity.
 Qed.
 
-Lemma cdr_cons : forall sfs v1 v2 pp,
-  value v1 -> value v2 ->
+Lemma cdr_cons : forall sfs v1 v2 pp C,
+  eval_ctx C -> value v1 -> value v2 ->
   pp = get_fresh_pp sfs ->
-  multi_step sfs ` (s_trm_cdr ; ` (s_trm_cons ; v1 ; v2))
-             ((store_cons pp v1 v2) :: sfs) v2.
+  multi_step sfs (C ` (s_trm_cdr ; ` (s_trm_cons ; v1 ; v2)))
+             ((store_cons pp v1 v2) :: sfs) (C v2).
 Proof.
   intros.
   eapply mstep_trans.
     lets D1 : step_ctx (ECApp s_trm_cdr (val_cdr)).
     apply mstep_one.
+    apply step_ctx with (C := C). apply H.
     apply D1.
-    apply step_cons_store; try assumption. apply H1.
+    apply step_cons_store; try assumption. apply H2.
   apply mstep_one.
+  apply step_ctx with (C := C). apply H.
   apply step_cdr with (v1 := v1) (v2 := v2).
   simpl. rewrite eq_dec_refl. reflexivity.
 Qed.
 
-Lemma bvar_carbvar : forall C sfs v pp,
+Lemma car_cons_bvar : forall C sfs v pp,
   eval_ctx C -> value v -> pp = get_fresh_pp sfs ->
    multi_step sfs (C ` ((s_trm_abs [` (s_trm_car ; s_trm_var (bvar 0))]) ; ` (s_trm_cons ; v ; s_trm_null)))
               ((store_cons pp v s_trm_null) :: sfs) (C v).
@@ -82,14 +86,16 @@ Proof.
   apply mstep_none.
 Qed.
 
-Example sem1 : forall sfs pp,
+(* Example sem1 : forall sfs pp,
   pp = get_fresh_pp sfs ->
   multi_step sfs ` (s_trm_car ; ` (s_trm_cons ; s_trm_true ; s_trm_null)) 
              ((store_cons pp s_trm_true s_trm_null) :: sfs) s_trm_true.
 Proof.
-  intros. 
-  apply car_cons; try constructor; assumption.
-Qed.
+  intros.
+  lets D1 : steps_context (ECHole).
+  eapply D1.
+  apply car_cons with (C := ECHole ); try constructor; assumption.
+Qed. *)
 
 (*
 (* Examples of the convert-assignments pass working as intended *)
