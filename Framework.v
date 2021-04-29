@@ -36,8 +36,38 @@ Proof.
       simpl in H. 
       + apply notin_union_2 in H. apply H.
       + apply notin_union_1 in H. apply H.
-    - f_equal. simpl in H. 
-Abort. 
+    - f_equal. simpl in H. induction ts. reflexivity.
+      assert (x `notin` s_fv a -> [x ~> u] a = a).
+        { apply Forall_inv in H0. apply H0. }
+      rewrite H1. f_equal. apply IHts.
+      + apply Forall_inv_tail in H0. apply H0.
+      + apply notin_union_2 in H. apply H.
+      + apply notin_union_1 in H. apply H.
+    - f_equal. simpl in H. induction ts. reflexivity.
+      assert (x `notin` s_fv a -> [x ~> u] a = a).
+        { apply Forall_inv in H0. apply H0. }
+      rewrite H1. f_equal. apply IHts.
+      + apply Forall_inv_tail in H0. apply H0.
+      + apply notin_union_2 in H. apply H.
+      + apply notin_union_1 in H. apply H.
+    - f_equal. simpl in H. induction ts. reflexivity.
+      assert (x `notin` s_fv a -> [x ~> u] a = a).
+        { apply Forall_inv in H0. apply H0. }
+      rewrite H1. f_equal. apply IHts.
+      + apply Forall_inv_tail in H0. apply H0.
+      + apply notin_union_2 in H. apply H.
+      + apply notin_union_1 in H. apply H.
+    - reflexivity. 
+    - reflexivity. 
+    - reflexivity. 
+    - reflexivity. 
+    - reflexivity. 
+    - reflexivity.
+    - reflexivity.
+    - reflexivity.
+    - reflexivity.
+    - reflexivity.
+Qed.
     
        
 

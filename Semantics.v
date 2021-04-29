@@ -276,6 +276,7 @@ Theorem vsr_preserve :
   vsr s' t.
 Proof.
   intros. induction t; simpl.
+Abort.
 
 
   
