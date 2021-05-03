@@ -1,5 +1,5 @@
 From vchez Require Import Definitions.
-From vchez Require Export Helpers.
+From vchez Require Import Helpers.
 From Coq Require Import List.
 From Coq Require Import Strings.String.
 From Metalib Require Import Metatheory.
@@ -286,5 +286,3 @@ Proof.
   intros. induction t; try (left; constructor); right.
   - destruct ts.  
   Abort.
-  - (* t = s_trm_seq ts *)
-    

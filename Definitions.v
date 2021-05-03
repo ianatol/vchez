@@ -55,6 +55,8 @@ Inductive s_trm : Set :=
   | s_trm_true
   | s_trm_false.
 
+Hint Constructors s_trm.
+
 Notation "` ( t ) " := (s_trm_seq [t]).
 Notation "` ( t1 ; t2 ; .. ; t3 )" := (s_trm_seq (cons t1 (cons t2 .. (cons t3 nil) ..))).
 
@@ -200,9 +202,15 @@ Fixpoint s_close_var_rec (k : nat) (z : var) (t : s_trm) {struct t} : s_trm :=
 (* replace fvar z's in t with bound variables at their appropriate depth *)
 Definition s_close_var z t := s_close_var_rec 0 z t.
 
+Inductive non_empty {A : Type} : list A -> Prop := 
+  | ne_list : 
+    forall l n, length l = S n -> non_empty l.
+
 (* terms are well formed (locally closed) if there are no bvars referring to invalid depth 
    we determine this by opening all abstractions with a fresh variable
-   if there are bound vars left over, the term is not locally closed *)
+   if there are bound vars left over, the term is not locally closed 
+   
+   also if ts are non-empty *)
 Inductive s_term : s_trm -> Prop :=
   (* if the body of an abs is well formed after opening its terms with a fresh variable, 
       it is well formed *)
@@ -214,11 +222,13 @@ Inductive s_term : s_trm -> Prop :=
      don't open with a fresh variable because bvars are not allowed in a begin
      i.e. the program (begin (bvar 0)) is NOT well formed *)
   | s_term_begin : forall ts,
-      s_terms ts -> s_term (s_trm_begin ts)
+      s_terms ts -> 
+      s_term (s_trm_begin ts)
   
   (* same for seq and set *)
   | s_term_seq : forall ts,
-      s_terms ts -> s_term (s_trm_seq ts)
+      s_terms ts -> 
+      s_term (s_trm_seq ts)
 
   | s_term_set : forall b t,
       s_term b -> s_term t -> s_term (s_trm_set b t)
@@ -241,7 +251,6 @@ Inductive s_term : s_trm -> Prop :=
   | s_term_false : s_term (s_trm_false)
 
 with s_terms : list s_trm -> Prop :=
-  | s_terms_nil : s_terms ([])
   | s_terms_single : forall t, s_term t -> s_terms [t]
   | s_terms_next : 
       forall t ts,
@@ -251,7 +260,8 @@ with s_terms : list s_trm -> Prop :=
 
 (* Body of an abstraction *)
 Definition s_body ts :=
-  exists L, forall x, x \notin L -> s_terms (s_open_each ts x).
+  exists L, forall x, x \notin L ->
+  s_terms (s_open_each ts x).
 
 (* Free variables of a term. Collect all fvars in a set*)
 Fixpoint s_fv (t : s_trm) : vars :=

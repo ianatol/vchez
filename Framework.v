@@ -10,15 +10,14 @@ Lemma s_term_abs_to_body : forall ts,
   s_term (s_trm_abs ts) -> s_body ts.
 Proof.
   intros. unfold s_body. inversion H.
-  exists L. apply H1. Qed.
+  exists L. intros. apply H1. apply H2. Qed.
 
 Lemma s_body_to_term_abs : forall ts,
   s_body ts -> s_term (s_trm_abs ts).
 Proof.
-  intros. inversion H. pick fresh x0.
-  apply s_term_abs with (L := x).
-  intros. apply H0. apply H1.
-Qed.
+  intros. inversion H. apply s_term_abs with (L := x).
+  apply H0.
+Qed. 
 
 Hint Resolve s_term_abs_to_body s_body_to_term_abs.
 
@@ -28,7 +27,8 @@ Proof.
   intros.
   induction t using s_trm_mutind with 
   (P := fun t => x `notin` s_fv t -> [x ~> u] t = t);
-  intros; simpl.
+    intros; simpl; 
+    try reflexivity.
     - induction x0. reflexivity. simpl in H. 
       apply notin_singleton_1' in H. 
       destruct (x0 == x). contradiction. reflexivity.
@@ -57,16 +57,6 @@ Proof.
       + apply Forall_inv_tail in H0. apply H0.
       + apply notin_union_2 in H. apply H.
       + apply notin_union_1 in H. apply H.
-    - reflexivity. 
-    - reflexivity. 
-    - reflexivity. 
-    - reflexivity. 
-    - reflexivity. 
-    - reflexivity.
-    - reflexivity.
-    - reflexivity.
-    - reflexivity.
-    - reflexivity.
 Qed.
     
        

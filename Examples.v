@@ -1,15 +1,11 @@
-From vchez Require Import Definitions.
-From vchez Require Export Pass.
-From vchez Require Import Semantics.
+From vchez Require Import Definitions. 
 From vchez Require Import Helpers.
+From vchez Require Import Pass.
+From vchez Require Import Semantics.
 From Coq Require Import List.
 From TLC Require Import LibTactics.
 From Metalib Require Import LibTactics.
 Import ListNotations.
-
-
-Tactic Notation "next_step" :=
-  eapply mstep_trans; apply mstep_one.
 
 (*Semantics examples*)
 
