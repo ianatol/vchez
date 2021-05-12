@@ -169,11 +169,17 @@ Inductive step : sfs -> s_trm -> sfs -> s_trm -> Prop :=
          s (s_trm_begin 
              (open_each ts v))
 
-  | step_var : (* get a variable's value from store *)
+  | step_var : (* variable in store *)
     forall s x v,
     get_val x s = SomeE v -> 
     step s (s_trm_var (fvar x))
          s v
+
+  | step_var_err :
+    forall s x e,
+    get_val x s = NoneE e ->
+    step s (s_trm_var (fvar x))
+         s (s_trm_err e)
   
   (* although set! can be called on bvars, 
      there is no semantic rule because such set!s only have meaning after substitution *)
@@ -260,29 +266,3 @@ Inductive eval : s_trm -> s_trm -> Prop :=
     value t2 ->
     multi_step s1 t1 s2 t2 ->
     eval t1 t2.
-
-Inductive vsr : sfs -> s_trm -> Prop :=
-  | vsr_val : forall s t, value t -> vsr s t
-  | vsr_stuck : forall s t, ~ (exists s' t', step s t s' t') -> vsr s t
-  | vsr_reducible : forall C s t,
-                    eval_ctx C ->
-                    (exists s' t', step s t s' t') -> 
-                    vsr s (C t).
-
-Theorem vsr_preserve :
-  forall s t,
-  vsr s t -> 
-  exists s' t', step s t s' t' ->
-  vsr s' t.
-Proof.
-  intros. induction t; simpl.
-Abort.
-
-
-  
-Theorem step_progress :
-  forall s t, s_term t -> value t \/ (exists s' t', step s t s' t').
-Proof.
-  intros. induction t; try (left; constructor); right.
-  - destruct ts.  
-  Abort.

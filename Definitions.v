@@ -1,4 +1,5 @@
 From Coq Require Import List.
+From Coq Require Import Strings.String.
 Import ListNotations.
 Import Nat.
 
@@ -51,6 +52,7 @@ Inductive s_trm : Set :=
   | s_trm_cdr
   | s_trm_pp (n : var)
   | s_trm_num (i : nat)
+  | s_trm_err (e : string)
   | s_trm_null
   | s_trm_true
   | s_trm_false.
@@ -59,6 +61,10 @@ Hint Constructors s_trm.
 
 Notation "` ( t ) " := (s_trm_seq [t]).
 Notation "` ( t1 ; t2 ; .. ; t3 )" := (s_trm_seq (cons t1 (cons t2 .. (cons t3 nil) ..))).
+
+Definition let_ v es :=
+  ` ( (s_trm_abs es) ; v).
+
 
 Theorem s_trm_mutind
  : forall 
@@ -70,6 +76,7 @@ Theorem s_trm_mutind
     (forall ts, Forall P ts -> P (s_trm_abs ts)) ->
     (forall n : atom, P (s_trm_pp n)) ->
     (forall i : nat, P (s_trm_num i)) ->
+    (forall s : string, P (s_trm_err s)) ->
     P s_trm_setcar ->
     P s_trm_setcdr ->
     P s_trm_cons ->
@@ -81,7 +88,7 @@ Theorem s_trm_mutind
     forall s : s_trm, P s.
 Proof.
   intro P.
-  intros var set seq begin abs pp num setcar setcdr cons car cdr null true false.
+  intros var set seq begin abs pp num err setcar setcdr cons car cdr null true false.
   refine (fix IH t : P t := _).
   case t; intros; try assumption.
   - apply seq. induction ts; intuition.
@@ -91,6 +98,7 @@ Proof.
   - apply abs. induction ts; intuition.
   - apply pp.
   - apply num.
+  - apply err. 
 Qed.
 
 (* values in source language *)
@@ -104,6 +112,7 @@ Inductive value : s_trm -> Prop :=
   | val_cdr : value (s_trm_cdr)
   | val_pp : forall n, value (s_trm_pp n)
   | val_num : forall i, value (s_trm_num i)
+  | val_err : forall e, value (s_trm_err e)
   | val_null : value (s_trm_null)
   | val_true : value (s_trm_true)
   | val_false : value (s_trm_false)
@@ -126,9 +135,9 @@ This means we have to keep track of the current level of abstraction with k
 So we are replacing all (bvar k) with (fvar x), and incrementing k with abstraction levels
 *)
 
-Definition open_var v k (u t : s_trm) :=
+Definition open_var v (k : nat) (u t : s_trm) :=
   match v with
-  | bvar i => if (k =? i) then u else t
+  | bvar i => if (k == i) then u else t
   | fvar x => t
   end.
 
@@ -147,7 +156,7 @@ Fixpoint s_open_rec (k : nat) (u : s_trm) (t : s_trm) {struct t} : s_trm :=
 
   (* replace bound variables at the current level of abstraction with u *)
   | s_trm_var v => match v with
-                   | bvar i => if (k =? i) then u else t
+                   | bvar i => if (k == i) then u else t
                    | fvar x => t
                    end
   (* nothing else contains bound variables *)
@@ -215,6 +224,7 @@ Inductive s_term : s_trm -> Prop :=
   (* if the body of an abs is well formed after opening its terms with a fresh variable, 
       it is well formed *)
   | s_term_abs : forall L ts,
+      non_empty ts ->
       (forall x, x \notin L -> s_terms (s_open_each ts x)) ->
       s_term (s_trm_abs ts)
 
@@ -222,11 +232,13 @@ Inductive s_term : s_trm -> Prop :=
      don't open with a fresh variable because bvars are not allowed in a begin
      i.e. the program (begin (bvar 0)) is NOT well formed *)
   | s_term_begin : forall ts,
-      s_terms ts -> 
+      non_empty ts ->
+      s_terms ts ->
       s_term (s_trm_begin ts)
   
   (* same for seq and set *)
   | s_term_seq : forall ts,
+      non_empty ts ->
       s_terms ts -> 
       s_term (s_trm_seq ts)
 

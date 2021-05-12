@@ -117,6 +117,7 @@ Definition has_sets_list := has_assigning_set_list big_num 0.
    | t_trm_cdr 
    | t_trm_pp (n : var)
    | t_trm_num (i : nat)
+   | t_trm_err (e : string)
    | t_trm_null
    | t_trm_true
    | t_trm_false.
@@ -171,6 +172,7 @@ Fixpoint convert_assignments (n : nat) (t : s_trm) : OptionE t_trm :=
     | s_trm_var v => SomeE (t_trm_var v)
     | s_trm_pp i => SomeE (t_trm_pp i)
     | s_trm_num i => SomeE (t_trm_num i)
+    | s_trm_err e => SomeE (t_trm_err e)
     | s_trm_null => SomeE t_trm_null
     | s_trm_true => SomeE t_trm_true
     | s_trm_false => SomeE t_trm_false
@@ -225,6 +227,7 @@ Fixpoint de_sugar n t :=
     | t_trm_cdr => SomeE s_trm_cdr
     | t_trm_pp n => SomeE (s_trm_pp n)
     | t_trm_num i => SomeE (s_trm_num i)
+    | t_trm_err e => SomeE (s_trm_err e)
     | t_trm_null => SomeE s_trm_null
     | t_trm_true => SomeE s_trm_true
     | t_trm_false => SomeE s_trm_false
