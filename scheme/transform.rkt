@@ -5,6 +5,16 @@
 ;; okay, let's write a version of this that works on programs that
 ;; aren't already decomposed into an evaluation context and a redex....
 
+;; 1) don't use flatten, it's gross :). Just handle the lists correctly
+;;   in their construction. See note in e-as
+;; 2) you're missing parentheses around the argument in lambdas. This will
+;;   prevent all the terms from running correctly; that means something
+;;   entirely different in scheme.
+;; 3) just use "lambda", not λ. The R6RS reduction semantics doesn't
+;;   include this shorthand and all the test cases will fail.
+;; 4) I still haven't taken a close enough look to see why (+ 3 4)
+;;   is transformed into (+ ((car 3) 4)), but there's definitely at
+;;   least one bug there, I'll warrant.
 
 ;; given a program, return the annotated version of it
 (define (ca/prog prog)
@@ -54,6 +64,8 @@
     [`(begin ,e1 ,e2 ...) (append (e-as e1) (e-as-l e2))]
     [`(,set! ,x ,e1) (cons x (e-as e1))]
     [`(λ ,x ,e1) (e-as e1)]
+    ;; no, not like this. you probably want
+    ;; (apply append (map e-as e))
     [`(,e1 ,e2 ...) (append (e-as e1) (e-as-l e2))]
     [_ '()]))
 
@@ -140,6 +152,6 @@
 (check-equal? (ca '(store ((x 4)) ((λ x x) [] ) [ x ]))
               '(store ((x (cons 4 null))) (((λ t ((λ x (car x))(cons t null)))) [] () ) [ (car x) ]))
 
-;;
-(check-equal? (ca/prog '(store () (+ 3 4)))
+;; ooh, this is really scary:
+#;(check-equal? (ca/prog '(store () (+ 3 4)))
               '(store () (+ 3 4)))

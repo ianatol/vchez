@@ -11,4 +11,9 @@
  (term
   (store () (letrec ([x 14]) (begin (set! x 15) x)))))
 
+(apply-reduction-relation
+ reductions
+ (term
+  (store () ((lambda (x) x) 3))))
+
 
