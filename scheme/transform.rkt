@@ -103,6 +103,8 @@
      #:when (member x as)
      `(lambda (t)
         ((lambda (,x) ,(ca/e e1 as))(cons t null)))]
+    [`(lambda () ,e1)
+     `(lambda () ,(ca/e e1 as))]
     [`(lambda (,x) ,e1)
      #:when (not (member x as))
      `(lambda (,x) ,(ca/e e1 as))]
