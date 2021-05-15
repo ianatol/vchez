@@ -120,7 +120,7 @@
     (E* F* (handlers proc ... hole) (dw x e hole e))
     
     (F (in-hole Fo F) (in-hole F* F) hole)
-    (Fo (v ... hole) (if hole e e) (set! x hole) (l! x hole))
+    (Fo (v ... hole v ...) (if hole e e) (set! x hole) (l! x hole))
     (F* (begin hole e e ...) (begin0 hole e e ...) 
         (begin0 (values v ...) hole e ...) (begin0 unspecified hole e ...)
         (call-with-values (lambda () hole e ...) v))
@@ -274,11 +274,11 @@
           "6cdr")
      
      (--> (store (sf_1 ... (mp_1 (cons v_1 v_2)) sf_2 ...) (in-hole E_1 (set-car! mp_1 v_3)))
-          (store (sf_1 ... (mp_1 (cons v_3 v_2)) sf_2 ...) (in-hole E_1 null))
+          (store (sf_1 ... (mp_1 (cons v_3 v_2)) sf_2 ...) (in-hole E_1 unspecified))
           "6setcar")
 
      (--> (store (sf_1 ... (mp_1 (cons v_1 v_2)) sf_2 ...) (in-hole E_1 (set-cdr! mp_1 v_3)))
-          (store (sf_1 ... (mp_1 (cons v_1 v_3)) sf_2 ...) (in-hole E_1 null))
+          (store (sf_1 ... (mp_1 (cons v_1 v_3)) sf_2 ...) (in-hole E_1 unspecified))
           "6setcdr")
 
      ;; null?
@@ -322,13 +322,13 @@
     (reduction-relation
      lang
      
-     (--> (in-hole P_1 (v_1 ... e_1 e_2 ...))
-          (in-hole P_1 ((lambda (x) (v_1 ... x e_2 ...)) e_1))
+     (--> (in-hole P_1 (e_1 ... e_i e_i+1 ...))
+          (in-hole P_1 ((lambda (x) (e_1 ... x e_i+1 ...)) e_i))
           "6mark"
           (fresh (x lifted))
-          (side-condition (not (v? (term e_1))))
+          (side-condition (not (v? (term e_i))))
           (side-condition 
-           (ormap (lambda (e) (not (v? e))) (term (e_2 ...)))))
+           (ormap (lambda (e) (not (v? e))) (term (e_1 ... e_i+1 ...)))))
      
      (--> (store (sf_1 ...) (in-hole E_1 ((lambda (x_1 x_2 ..._1) e_1 e_2 ...) v_1 v_2 ..._1)))
           (store (sf_1 ... (bp v_1))
@@ -368,7 +368,7 @@
      
      ;; set!
      (--> (store (sf_1 ... (x_1 v_1) sf_2 ...) (in-hole E_1 (set! x_1 v_2)))
-          (store (sf_1 ... (x_1 v_2) sf_2 ...) (in-hole E_1 null))
+          (store (sf_1 ... (x_1 v_2) sf_2 ...) (in-hole E_1 unspecified))
           "6set")
      
      (--> (in-hole P_1 (procedure? proc)) (in-hole P_1 #t) "6proct")

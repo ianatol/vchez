@@ -2,6 +2,8 @@
 
 (require rackunit)
 
+(provide ca/prog)
+
 ;; okay, let's write a version of this that works on programs that
 ;; aren't already decomposed into an evaluation context and a redex....
 
@@ -92,38 +94,42 @@
 
 (define (ca/e e as)
   (match e
-    [`(begin ,e1 ,e2 ...) `(begin ,(ca/e e1 as) ,(ca/es e2 as))]
+    [`(begin ,e1 ,e2 ...) `(begin ,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
     [`(set! ,x ,e1) `(set-car! ,x ,(ca/e e1 as))]
     [x
      #:when (member x as)
      `(car ,x)]
     [`(lambda (,x) ,e1)
      #:when (member x as)
-     `(lambda (t) ((lambda (,x) ,(ca/e e1 as))(cons t null)))]
-    [`(lambda ,x ,e1)
+     `(lambda (t)
+        ((lambda (,x) ,(ca/e e1 as))(cons t null)))]
+    [`(lambda (,x) ,e1)
      #:when (not (member x as))
      `(lambda (,x) ,(ca/e e1 as))]
     [`(,op ,e1 ,e2)
      #:when (member op '(+ - / *))
      `(,op ,(ca/e e1 as) ,(ca/e e2 as))]
-    [`(,e1 ,e2 ...) `(,(ca/e e1 as) ,(ca/es e2 as))]
+    [n
+     #:when (integer? n)
+     n]
+    [`(,e1 ,e2 ...) `(,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
     [u u]))
 
 ;x previously assigned
 (check-equal? (ca/decomp '(store ((x 4)) [] [ (begin null x) ]))
-              '(store ((x (cons 4 null))) [] [ (begin null ((car x))) ]))
+              '(store ((x (cons 4 null))) [] [ (begin null (car x)) ]))
 
 ;x previously assigned and assigned again
 (check-equal? (ca/decomp '(store ((x 4)) [] [ (begin (set! x 5) x)]))
-              '(store ((x (cons 4 null))) [] [(begin (set-car! x 5) ((car x)))]))
+              '(store ((x (cons 4 null))) [] [(begin (set-car! x 5) (car x))]))
 
 ;y previously assigned, x not
 (check-equal? (ca/decomp '(store ((y 5)) [] [ (begin x y)]))
-              '(store ((y (cons 5 null))) [] [ (begin x ((car y)))]))
+              '(store ((y (cons 5 null))) [] [ (begin x (car y))]))
 
 ;x y both previously assigned
 (check-equal? (ca/decomp '(store ((x 3) (y 4)) [] [ (begin x y) ]))
-              '(store ((x (cons 3 null)) (y (cons 4 null))) [] [ (begin (car x) ((car y))) ]))
+              '(store ((x (cons 3 null)) (y (cons 4 null))) [] [ (begin (car x) (car y)) ]))
 
 ;x assigned inside lambda
 (check-equal? (ca/decomp '(store () [] [ (lambda (x) (set! x 4)) ]))
@@ -135,7 +141,7 @@
 
 ;similar to above
 (check-equal? (ca/decomp '(store ((x (lambda (y) (set! y 5)))) [] [ (begin x y) ]))
-              '(store ((x (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) [] [ (begin (car x) ((car y))) ]))
+              '(store ((x (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) [] [ (begin (car x) (car y)) ]))
 
 ;x assigned in eval context, also shows transforming eval context
 (check-equal? (ca/decomp '(store () ((lambda (x) (set! x 4)) [] ) [ y ]))
