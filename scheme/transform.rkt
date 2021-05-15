@@ -26,7 +26,7 @@
 
 ;; want a version of this that just takes an expression:
 (define (get-assignments/exp store e)
-  (append (map as/sf store) (as/e e)))
+  (flatten (append (map as/sf store) (as/e e))))
 
 (define (get-assignments store E e)
   (flatten (append (map as/sf store) (append (as/E E) (as/e e)))))
@@ -46,7 +46,7 @@
 (define (as/e e)
   (match e
     [`(begin ,e1 ,e2 ...) (append (as/e e1) (map as/e e2))]
-    [`(,set! ,x ,e1) (cons x (as/e e1))]
+    [`(set! ,x ,e1) (cons x (as/e e1))]
     [`(lambda (,x) ,e1) (as/e e1)]
     [`(,e1 ,e2 ...) (append (as/e e1) (map as/e e2))]
     [_ '()]))
@@ -56,7 +56,6 @@
   (match decomp-prog
     [`(store (,sfs ...) ,E [ ,e ])
      (let ([as (get-assignments sfs E e)])
-       (display as)
        `(store ,(map (λ (x) (ca/sf x as)) sfs) ,(ca/E E as) [ ,(ca/e e as) ]))]))
 
 
@@ -94,6 +93,9 @@
     [`(lambda ,x ,e1)
      #:when (not (member x as))
      `(lambda (,x) ,(ca/e e1 as))]
+    [`(,op ,e1 ,e2)
+     #:when (member op '(+ - / *))
+     `(,op ,(ca/e e1 as) ,(ca/e e2 as))]
     [`(,e1 ,e2 ...) `(,(ca/e e1 as) ,(ca/es e2 as))]
     [u u]))
 
@@ -134,5 +136,5 @@
               '(store ((x (cons 4 null))) (((lambda (t) ((lambda (x) (car x))(cons t null)))) [] () ) [ y ]))
 
 ;; ooh, this is really scary:
-#;(check-equal? (ca/prog '(store () (+ 3 4)))
+(check-equal? (ca/prog '(store () (+ 3 4)))
               '(store () (+ 3 4)))
