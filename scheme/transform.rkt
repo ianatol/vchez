@@ -51,6 +51,22 @@
     [`(,e1 ,e2 ...) (append (as/e e1) (map as/e e2))]
     [_ '()]))
 
+;given a program decomposed into eval ctx and expression,
+;gives back a program with the expression plugged into the eval ctx
+(define (recomp/prog prog)
+  (match prog
+    [`(store (,sfs ...) ,E [ ,e ])
+     `(store (,sfs ...) ,(recomp/E E e))]))
+
+(define (recomp/E E e)
+  (match E
+    ['[] e]
+    [`(set! ,x ,E1)
+     `(set! ,x ,(recomp/E E1 e))]
+    [`(begin ,E1 ,e1 ,e2 ...)
+     `(begin ,(recomp/E E1 e) ,e1 ,e2)]
+    [`(,v1 ... ,E1 ,v2 ...)
+     `(,v1 ,(recomp/E E1 e) ,v2)]))
 
 (define (ca/decomp decomp-prog)
   (match decomp-prog
@@ -58,12 +74,6 @@
      (let ([as (get-assignments sfs E e)])
        `(store ,(map (λ (x) (ca/sf x as)) sfs) ,(ca/E E as) [ ,(ca/e e as) ]))]))
 
-
-
-#;(define (ca-sf-l sfs as)
-  (match sfs
-    ['() '()]
-    [`(,sf ,sfs1 ...) (cons (ca-sf sf as) (ca-sf-l sfs1 as))]))
 
 (define (ca/sf sf as)
   (match sf
