@@ -44,8 +44,11 @@
   (displayln 'P^~*)
   (display (step* (ca/prog prog))))
 
-(show-Ps '(store () ((lambda (x) (set! x 5)) 4)))
-
+;(show-Ps '(store () ((lambda (x) (set! x 5)) 4)))
+;(show-Ps '(store () (+ 3 4)))
+;(show-Ps '(store ((x 5)) (set! x 4)))
+;(step '(store ((x 5)) (begin (null (set! x 3)))))
+(step '(store (((-mp x) (cons 5 null))) (set-car! (-mp x) 4)))
 (test-ca-single '(store () (+ 3 4)))
 ;(test-ca-single '(store () ((lambda (x) x) 3)))
 ;(test-ca-many '(store () ((lambda (x) (set! x 5)) 4)))
