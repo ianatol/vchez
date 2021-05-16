@@ -93,6 +93,16 @@
 (define (ca/es es as)
   (map (λ (x) (ca/e x as)) es))
 
+;if we are transforming e1 in (lambda (x) e1), do not change x to (-mp x)
+(define (ca/e-lam e as bs)
+  (match e
+    [`(set! ,x ,e1)
+     #:when (member x bs)
+     `(set-car! ,x ,(ca/e-lam e1 as bs))]
+    [`(lambda (,x) ,e1)
+     `(lambda (,x) ,(ca/e-lam e1 as (cons x bs)))]
+    [e1 (ca/e e1 as)]))
+
 (define (ca/e e as)
   (match e
     [`(begin ,e1 ,e2 ...) `(begin ,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
@@ -100,22 +110,26 @@
     [x
      #:when (member x as)
      `(car (-mp ,x))]
-    [`(lambda (,x) ,e1)
-     #:when (member x as)
-     `(lambda (t)
-        ((lambda (,x) ,(ca/e e1 as))(cons t null)))]
     [`(lambda () ,e1)
      `(lambda () ,(ca/e e1 as))]
     [`(lambda (,x) ,e1)
+     #:when (member x as)
+     `(lambda (t)
+        ((lambda (,x) ,(ca/e-lam e1 as `(,x)))(cons t null)))]
+    [`(lambda (,x) ,e1)
      #:when (not (member x as))
-     `(lambda (,x) ,(ca/e e1 as))]
+     `(lambda (,x) ,(ca/e-lam e1 as `(,x)))]
     [`(,op ,e1 ,e2)
      #:when (member op '(+ - / *))
      `(,op ,(ca/e e1 as) ,(ca/e e2 as))]
     [n
      #:when (integer? n)
      n]
-    [`(,e1 ,e2 ...) `(,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
+    [`(,e1 ,e2 ...)
+     #:when (not (empty? e2))
+     `(,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
+    [`(,e1)
+     `(,(ca/e e1 as))]
     [u u]))
 
 ;x previously assigned
@@ -136,19 +150,19 @@
 
 ;x assigned inside lambda
 (check-equal? (ca/decomp '(store () [] [ (lambda (x) (set! x 4)) ]))
-              '(store () [] [ (lambda (t) ((lambda (x) (set-car! (-mp x) 4))(cons t null))) ]))
+              '(store () [] [ (lambda (t) ((lambda (x) (set-car! x 4))(cons t null))) ]))
 
 ;x previously assigned, y assigned inside lambda in store
 (check-equal? (ca/decomp '(store ((x (lambda (y) (set! y 5)))) [] [ x ]))
-              '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! (-mp y) 5))(cons t null))) null))) [] [ (car (-mp x)) ]))
+              '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) [] [ (car (-mp x)) ]))
 
 ;similar to above
 (check-equal? (ca/decomp '(store ((x (lambda (y) (set! y 5)))) [] [ (begin x y) ]))
-              '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! (-mp y) 5))(cons t null))) null))) [] [ (begin (car (-mp x)) (car (-mp y))) ]))
+              '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) [] [ (begin (car (-mp x)) (car (-mp y))) ]))
 
 ;x assigned in eval context, also shows transforming eval context
 (check-equal? (ca/decomp '(store () ((lambda (x) (set! x 4)) [] ) [ y ]))
-              '(store () (((lambda (t) ((lambda (x) (set-car! (-mp x) 4))(cons t null)))) [] ()) [ y ]))
+              '(store () (((lambda (t) ((lambda (x) (set-car! x 4))(cons t null)))) [] ()) [ y ]))
 
 ;x in store, transforms eval context
 (check-equal? (ca/decomp '(store ((x 4)) ((lambda (x) x) [] ) [ y ]))
