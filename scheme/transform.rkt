@@ -120,10 +120,11 @@
 
 (define (ca/e e as)
   (match e
-    #;[`(begin ,v1 ... ,e1 ,e2 ...)
+    [`(begin ,v1 ... ,e1 ,e2 ...)
      #:when (vals? v1)
-     `(begin ,(apply append (ca/es v1 as)) ,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
-    [`(begin ,e1 ,e2 ...) `(begin ,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
+     (remove* (list '()) `(begin ,(apply append (ca/es v1 as)) ,(ca/e e1 as) ,(apply append (ca/es e2 as))))]
+    [`(begin ,e1 ,e2 ...)
+     (remove* (list '()) `(begin ,(ca/e e1 as) ,(apply append (ca/es e2 as))))]
     [`(set! ,x ,e1) `(set-car! (-mp ,x) ,(ca/e e1 as))]
     [x
      #:when (member x as)
@@ -145,7 +146,7 @@
      n]
     [`(,e1 ,e2 ...)
      #:when (not (empty? e2))
-     `(,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
+     (remove* (list '()) `(,(ca/e e1 as) ,(apply append (ca/es e2 as))))]
     [`(,e1)
      `(,(ca/e e1 as))]
     [`(values ,v1)

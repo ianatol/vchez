@@ -105,7 +105,7 @@
 ;;beginc
 ;(sim-example 1 '(store () (begin (values 5) (lambda (x) (set! x 5)))))
 
-;;begind NOT WORKING 
+;;begind 
 ;(sim-example 1 '(store ((x 99)) (begin (set! x 100))))
 
 ;;set
