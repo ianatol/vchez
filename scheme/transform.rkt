@@ -2,7 +2,8 @@
 
 (require rackunit)
 
-(provide ca/prog)
+(provide ca/prog
+         normalize)
 
 ;; okay, let's write a version of this that works on programs that
 ;; aren't already decomposed into an evaluation context and a redex....
@@ -26,6 +27,11 @@
            [bs (get-bounds/exp sfs e)])
        `(store ,(map (λ (x) (ca/sf x as bs)) sfs) ,(ca/e e as bs)))]))
 
+(define (names prog)
+  (match prog
+    [`(store (,sfs ...) ,e)
+     (get-names sfs e)]))
+
 
 ;; want a version of this that just takes an expression:
 (define (get-assignments/exp store e)
@@ -39,6 +45,9 @@
 
 (define (get-bounds store E e)
   (flatten (append (map bs/sf store) (append (bs/E E) (bs/e e)))))
+
+(define (get-names store e)
+  (remove-duplicates (flatten (append (map names/sf store) (names/exp e)))))
 
 (define (as/sf sf)
   (match sf
@@ -104,6 +113,108 @@
     [`(,e1 ,e2 ...) (append (bs/e e1) (apply append (bs/es e2)))]
     [_ '()]))
 
+(define (names/sf sf)
+  (match sf
+    [`((-mp ,x) ,v) `(,x ,(names/exp v))]
+    [`(,x ,v) `(,x ,(names/exp v))]
+    [u '()]))
+
+(define (names/exps es)
+  (map names/exp es))
+
+(define (names/exp e)
+  (match e
+    [keyword
+     #:when (member keyword '(cons null set-car! set-cdr! car cdr + - / * -mp))
+     '()]
+    [n
+     #:when (integer? n)
+     '()]
+    [`(begin ,v1 ... ,e1 ,e2 ...)
+     `(,(names/exps v1) ,(names/exp e1) ,(names/exps e2))]
+    [`(begin ,e1 ,e2 ...)
+     `(,(names/exp e1) ,(names/exps e2))]
+    [`(set! ,x ,e1)
+     `(,x ,(names/exp e1))]
+    [`(lambda () ,e1)
+     (names/exp e1)]
+    [`(lambda (,x) ,e1)
+     `(,x ,(names/exp e1))]
+    [`(values ,v1)
+     (names/exp v1)]
+    [`(,e1 ,e2 ,e3)
+     `(,(names/exp e1) ,(names/exp e2) ,(names/exp e3))]
+    [`(,e1)
+     (names/exp e1)]
+    [`(,e1 ,e2 ...)
+     `(,(names/exp e1) ,(names/exps e2))]
+    [x (list x)]))
+
+(define (normalize prog)
+  (norm-helper prog (names prog) 1))
+
+(define (gen-var-sym n)
+  (string->symbol (string-append "i" (number->string n))))
+
+(define (norm-helper prog nmes i)
+  (match nmes
+    ['() prog]
+    [`(,name ,rest ...)
+     (norm-helper (replace/prog name i prog) rest (add1 i))]))
+
+(define (replace/prog x n prog)
+  (match prog
+    [`(store (,sfs ...) ,e)
+     `(store ,(replace/sfs x n sfs) ,(replace/exp x n e))]))
+
+(define (replace/sfs x n sfs)
+  (map (λ (sf) (replace/sf x n sf)) sfs))
+
+(define (replace/sf x n sf)
+  (match sf
+    [`((-mp ,z) ,v)
+     #:when (eq? z x)
+     `((-mp ,(gen-var-sym n)) ,(replace/exp x n v))]
+    [`((-mp ,z) ,v)
+     `((-mp ,z) ,(replace/exp x n v))]))
+
+(define (replace/exps x n es)
+  (map (λ (e) (replace/exp x n e)) es))
+
+(define (replace/exp x n e)
+  (match e
+    [`(begin ,v1 ... ,e1 ,e2 ...)
+     `(begin ,(apply append (replace/exps x n v1)) ,(replace/exp x n e1) ,(apply append (replace/exps x n e2)))]
+    [`(begin ,e1 ,e2 ...)
+     `(begin ,(replace/exp x n e1),(apply append (replace/exps x n e2)))]
+    [`(set! ,z ,e1)
+     #:when (eq? z x)
+     `(set! ,(gen-var-sym n) ,(replace/exp x n e1))]
+    [`(set! ,z ,e1)
+     `(set! ,z ,(replace/exp x n e1))]
+    [`(lambda () ,e1)
+     `(lambda () ,(replace/exp x n e1))]
+    [`(lambda (,z) ,e1)
+     #:when (eq? z x)
+     `(lambda ,(gen-var-sym n) ,(replace/exp x n e1))]
+    [`(lambda (,z) ,e1)
+     `(lambda (,z) ,(replace/exp x n e1))]
+    [`(values ,v1)
+     `(values ,(replace/exp x n v1))]
+    [`(,e1 ,e2 ,e3)
+     `(,(replace/exp x n e1) ,(replace/exp x n e2) ,(replace/exp x n e3))]
+    [`(,e1) `(,(replace/exp x n e1))]
+    [`(,e1 ,e2 ...)
+     `(,(replace/exp x n e1) ,(apply append (replace/exps x n e2)))]
+    [z
+     #:when (eq? z x)
+     (gen-var-sym n)]
+    [u u]))
+  
+  
+    
+
+
 
 ;given a program decomposed into eval ctx and expression,
 ;gives back a program with the expression plugged into the eval ctx
@@ -145,6 +256,10 @@
 (define (vals? es)
   (andmap val? es))
 
+
+
+
+;;convert-assignments pass
 (define (ca/sf sf as bs)
   (match sf
     [`((-mp ,x) ,v) `((-mp ,x) ,(ca/e v as bs))]
@@ -216,6 +331,8 @@
      `(values ,(ca/e v1 as bs))]
     [u u]))
 
+
+;;tests
 ;x previously assigned;
 (check-equal? (ca/prog '(store ((x 4)) (begin null x)))
               '(store (((-mp x) (cons 4 null)))(begin null (car (-mp x)))))
@@ -265,3 +382,20 @@
 
 (check-equal? (ca/prog '(store () (cons 5 null)))
               '(store () (cons 5 null)))
+
+;names tests
+(check-equal? (names '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null)))(begin (car (-mp x)))))
+              '(x t y))
+
+(check-equal? (names '(store ((x 5) (y 4) (z 3)) ()))
+              '(x y z))
+
+(check-equal? (names '(store (((-mp z) (cons (lambda (v) v) (lambda (w) (+ w 3)))) ((-mp x) (cons x x))) (car (-mp z))))
+              '(z v w x))
+
+(check-equal? (names '(store () ()))
+              '())
+
+;normalize tests
+(check-equal? (normalize '(store (((-mp bp) (cons 4 null))) ((lambda () (begin (set-car! (-mp bp) 5) (car (-mp bp)))))))
+               (normalize '(store (((-mp x1) (cons 4 null))) ((lambda () (begin (set-car! (-mp x1) 5) (car (-mp x1))))))))
