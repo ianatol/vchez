@@ -76,6 +76,21 @@
      (let ([as (get-assignments sfs E e)])
        `(store ,(map (λ (x) (ca/sf x as)) sfs) ,(ca/E E as) [ ,(ca/e e as) ]))]))
 
+(define (val? e)
+  (match e
+    [`(-mp ,x) #t]
+    [n
+     #:when (integer? n)
+     #t]
+    [`(lambda () ,e1) #t]
+    [`(lambda (,x) ,e1) #t]
+    [u
+     (not (equal?
+      #f
+      (member u '(null #t #f car cdr cons set-car! set-cdr! + - / *))))]))
+
+(define (vals? es)
+  (andmap val? es))
 
 (define (ca/sf sf as)
   (match sf
@@ -105,6 +120,9 @@
 
 (define (ca/e e as)
   (match e
+    #;[`(begin ,v1 ... ,e1 ,e2 ...)
+     #:when (vals? v1)
+     `(begin ,(apply append (ca/es v1 as)) ,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
     [`(begin ,e1 ,e2 ...) `(begin ,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
     [`(set! ,x ,e1) `(set-car! (-mp ,x) ,(ca/e e1 as))]
     [x
@@ -130,9 +148,11 @@
      `(,(ca/e e1 as) ,(apply append (ca/es e2 as)))]
     [`(,e1)
      `(,(ca/e e1 as))]
+    [`(values ,v1)
+     `(values ,(ca/e v1 as))]
     [u u]))
 
-;x previously assigned
+;x previously assigned;
 (check-equal? (ca/decomp '(store ((x 4)) [] [ (begin null x) ]))
               '(store (((-mp x) (cons 4 null))) [] [ (begin null (car (-mp x))) ]))
 

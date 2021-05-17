@@ -93,10 +93,31 @@
       (displayln (step-tag-n i P^)))))
 
 ;;appN!
-(sim-example 5 '(store () ((lambda (x) (set! x 5)) 4)))
+;(sim-example 5 '(store () ((lambda (x) (set! x 5)) 4)))
+;(sim-example 5 '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
+
+;;appN
+;(sim-example 1 '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
+
+;;app0
+;(sim-example 1 '(store ((x 4)) ((lambda () x))))
+
+;;beginc
+;(sim-example 1 '(store () (begin (values 5) (lambda (x) (set! x 5)))))
+
+;;begind NOT WORKING 
+;(sim-example 1 '(store ((x 99)) (begin (set! x 100))))
+
+;;set
+;(sim-example 1 '(store ((x 5)) (set! x 5)))
 
 ;;+
 ;(sim-example 1 '(store () (+ 3 4)))
+
+;;-
+;(sim-example 1 '(store () (- 3 4)))
+
+
 
 ;;begind
 ;(sim-example 1 '(store () (begin 5)))
