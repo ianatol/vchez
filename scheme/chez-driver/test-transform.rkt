@@ -75,12 +75,22 @@
 ;P^~* contains (store (((-mp x1) (cons 4 null))) ((lambda () (set-car! (-mp x1) 5))))
 
 ;;Normalize a program wrt alpha equivalence
-#;(define (a-norm prog)
+(define (a-norm prog)
   (a-norm-helper 1 prog))
 
-#;(define (a-norm-helper prog n)
+(define (a-norm-helper prog n)
   (match prog
-    ))
+    [`(begin ,v1 ... ,e1 ,e2 ...) ]
+    [`(begin ,e1 ,e2 ...) ]
+    [`(set! ,x ,e1) ]
+    [`(lambda () ,e1) ]
+    [`(lambda (,x) ,e1) ]
+    [`(,op ,e1 ,e2)
+     #:when (member op '(+ - / *))
+     (append (as/e e1) (as/e e2))]
+    [`(,e1) (as/e e1)]
+    [`(values ,v1) (as/e v1)]
+    [`(,e1 ,e2 ...) (append (as/e e1) (apply append (as/es e2)))]
 
 ;Generates an example of ca being a simulation relation
 ; n is the number of steps that a transformed program takes to get to the program resulting from a single step and then transforming
