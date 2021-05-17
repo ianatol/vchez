@@ -6,14 +6,20 @@
          "../transform.rkt")
 
 (define (step prog)
-  (car (apply-reduction-relation
-   reductions
-   prog)))
+  (let ([prog~ (apply-reduction-relation
+                reductions
+                prog)])
+    (match prog~
+      ['() '()]
+      [res (car res)])))
 
 (define (step-tag prog)
-  (car (apply-reduction-relation/tag-with-names
-        reductions
-        prog)))
+  (let ([prog~ (apply-reduction-relation/tag-with-names
+                reductions
+                prog)])
+    (match prog~
+      ['() '()]
+      [res (car res)])))
 
 (define (step-n n prog)
   (if (equal? n 1)
@@ -102,14 +108,18 @@
 ;;app0
 ;(sim-example 1 '(store ((x 4)) ((lambda () x))))
 
+;;var
+;(sim-example 1 '(store ((x 4)) (x)))
+
+;;set
+;(sim-example 1 '(store ((x 5)) (set! x 5)))
+
 ;;beginc
 ;(sim-example 1 '(store () (begin (values 5) (lambda (x) (set! x 5)))))
 
 ;;begind 
 ;(sim-example 1 '(store ((x 99)) (begin (set! x 100))))
 
-;;set
-;(sim-example 1 '(store ((x 5)) (set! x 5)))
 
 ;;+
 ;(sim-example 1 '(store () (+ 3 4)))
