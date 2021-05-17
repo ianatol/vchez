@@ -140,12 +140,12 @@
       [`(,rule ,body) rule]
       ['() '()])))
 
-(next-rule
+#;(next-rule
  '(store ()
          '((lambda (y)
              ((lambda (x) (begin (set! x 5) x)) y)) 4)))
 
-((lambda (y)
+#;((lambda (y)
   (lambda (x)
     (begin
       (set! x 5)
