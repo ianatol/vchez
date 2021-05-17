@@ -37,6 +37,9 @@
    prog
    #:all? #t))
 
+(define (normalize* progs)
+  (map normalize progs))
+
 (define (show-Ps prog)
   (displayln 'P)
   (displayln prog)
@@ -60,19 +63,14 @@
    (let* ([P~ (step prog)] ;P prime
          [P^ (ca/prog prog)] ;P hat
          [P~^ (ca/prog P~)]) ;P prime hat
-    (member P~^ (step* P^)))
+    (member (normalize P~^) (normalize* (step* P^))))
    #f))
 
 (test-ca-single '(store () (+ 3 4)))
 (test-ca-many '(store ((x 5)) (set! x 4)))
 (test-ca-single '(store ((x 5)) (set! x 4)))
-
-;(test-ca-many '(store () ((lambda (x) (set! x 5)) 4)))
-;this should work but doesn't due to names not matching
-;P~ = (store ((bp 4)) ((lambda () (set! bp 5))))
-;P^ = (store () ((lambda (t) ((lambda (x) (set-car! x 5)) (cons t null))) 4))
-;P~^ = (store (((-mp bp) (cons 4 null))) ((lambda () (set-car! (-mp bp) 5))))
-;P^~* contains (store (((-mp x1) (cons 4 null))) ((lambda () (set-car! (-mp x1) 5))))
+(test-ca-many '(store () ((lambda (x) (set! x 5)) 4)))
+;(test-ca-many '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
 
 ;Generates an example of ca being a simulation relation
 ; n is the number of steps that a transformed program takes to get to the program resulting from a single step and then transforming
@@ -100,7 +98,7 @@
 
 ;;appN!
 ;(sim-example 5 '(store () ((lambda (x) (set! x 5)) 4)))
-(sim-example 5 '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
+;(sim-example 5 '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
 
 ;;appN
 ;(sim-example 1 '(store ((y 3)) ((lambda (x) (+ x y)) 5)))

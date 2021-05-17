@@ -25,12 +25,14 @@
     [`(store (,sfs ...) ,e)
      (let ([as (get-assignments/exp sfs e)]
            [bs (get-bounds/exp sfs e)])
-       `(store ,(map (λ (x) (ca/sf x as bs)) sfs) ,(ca/e e as bs)))]))
+       `(store ,(map (λ (x) (ca/sf x as bs)) sfs) ,(ca/e e as bs)))]
+    [u u]))
 
 (define (names prog)
   (match prog
     [`(store (,sfs ...) ,e)
-     (get-names sfs e)]))
+     (get-names sfs e)]
+    [u u]))
 
 
 ;; want a version of this that just takes an expression:
@@ -165,7 +167,8 @@
 (define (replace/prog x n prog)
   (match prog
     [`(store (,sfs ...) ,e)
-     `(store ,(replace/sfs x n sfs) ,(replace/exp x n e))]))
+     `(store ,(replace/sfs x n sfs) ,(replace/exp x n e))]
+    [u u]))
 
 (define (replace/sfs x n sfs)
   (map (λ (sf) (replace/sf x n sf)) sfs))
@@ -221,7 +224,8 @@
 (define (recomp/prog prog)
   (match prog
     [`(store (,sfs ...) ,E [ ,e ])
-     `(store (,sfs ...) ,(recomp/E E e))]))
+     `(store (,sfs ...) ,(recomp/E E e))]
+    [u u]))
 
 (define (recomp/E E e)
   (match E
