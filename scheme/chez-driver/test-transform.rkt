@@ -2,8 +2,6 @@
 
 (require redex
          rackunit
-         racket/pretty
-         racket/format
          "../rvrs2.rkt"
          "../transform.rkt")
 
