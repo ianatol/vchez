@@ -179,7 +179,9 @@
      `((-mp ,z) ,(replace/exp x n v))]))
 
 (define (replace/exps x n es)
-  (map (λ (e) (replace/exp x n e)) es))
+  (match es
+    [`(,e) (list (replace/exp x n e))]
+    [es_ (map (λ (e) (replace/exp x n e)) es_)]))
 
 (define (replace/exp x n e)
   (match e
@@ -249,8 +251,8 @@
     [`(lambda (,x) ,e1) #t]
     [u
      (not (equal?
-      #f
-      (member u '(null #t #f car cdr cons set-car! set-cdr! + - / *))))]))
+           #f
+           (member u '(null #t #f car cdr cons set-car! set-cdr! + - / *))))]))
 
 (define (vals? es)
   (andmap val? es))
@@ -360,11 +362,11 @@
 
 ;x assigned in eval context, also shows transforming eval context
 #;(check-equal? (ca/decomp '(store () ((lambda (x) (set! x 4)) [] ) [ y ]))
-              '(store () (((lambda (t) ((lambda (x) (set-car! x 4))(cons t null)))) [] ()) [ y ]))
+                '(store () (((lambda (t) ((lambda (x) (set-car! x 4))(cons t null)))) [] ()) [ y ]))
 
 ;x in store, transforms eval context
 #;(check-equal? (ca/decomp '(store ((x 4)) ((lambda (x) x) [] ) [ y ]))
-              '(store (((-mp x) (cons 4 null))) (((lambda (t) ((lambda (x) (car (-mp x)))(cons t null)))) [] () ) [ y ]))
+                '(store (((-mp x) (cons 4 null))) (((lambda (t) ((lambda (x) (car (-mp x)))(cons t null)))) [] () ) [ y ]))
 
 ;mp in store not transformed
 (check-equal? (ca/prog '(store (((-mp x) (cons 5 null))) (set! y 4)))
@@ -395,4 +397,4 @@
 
 ;normalize tests
 (check-equal? (normalize '(store (((-mp bp) (cons 4 null))) ((lambda () (begin (set-car! (-mp bp) 5) (car (-mp bp)))))))
-               (normalize '(store (((-mp x1) (cons 4 null))) ((lambda () (begin (set-car! (-mp x1) 5) (car (-mp x1))))))))
+              (normalize '(store (((-mp x1) (cons 4 null))) ((lambda () (begin (set-car! (-mp x1) 5) (car (-mp x1))))))))

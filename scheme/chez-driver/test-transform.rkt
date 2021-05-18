@@ -2,6 +2,8 @@
 
 (require redex
          rackunit
+         racket/pretty
+         racket/format
          "../rvrs2.rkt"
          "../transform.rkt")
 
@@ -31,12 +33,12 @@
 
 (define (step-n-all n prog)
   (if (>= n 1)
-      (cons (step-n n prog) (step-n-all (sub1 n) prog))
+      (reverse (cons (step-n n prog) (step-n-all (sub1 n) prog)))
       '()))
 
 ;;Single step n times and give info on the last step taken
 (define (step-tag-n n prog)
-    (if (equal? n 1)
+  (if (equal? n 1)
       (step-tag prog)
       (step-tag (step-n (sub1 n) prog))))
 
@@ -79,9 +81,9 @@
 (define (test-ca-many prog)
   (check-not-equal?
    (let* ([P~ (step prog)] ;P prime
-         [P^ (ca/prog prog)] ;P hat
-         [P~^ (ca/prog P~)]) ;P prime hat
-    (member (normalize P~^) (normalize* (step* P^))))
+          [P^ (ca/prog prog)] ;P hat
+          [P~^ (ca/prog P~)]) ;P prime hat
+     (member (normalize P~^) (normalize* (step* P^))))
    #f))
 
 ;;Takes a program and compares P~^ and P^* limited to 5 steps
@@ -96,15 +98,14 @@
 ; prog is a program that takes a step using the desired rule
 (define (sim-example n prog)
   (let* ([P prog]
-      [P~ (step P)]
-      [P~/info (step-tag P)]
-      [P^ (ca/prog P)]
-      [P~^ (ca/prog P~)])
-    (display "P = ")
-    (displayln P)
-    (display "P steps to P~ using rule: ")
-    (displayln P~/info)
-    (display "P^ = ")
+         [P~ (step-tag P)]
+         [P~-step (car P~)]
+         [P~-prog (cdr P~)]
+         [P^ (ca/prog P)]
+         [P~^ (ca/prog P~-prog)])
+    (display (~a P " steps to " P~-prog "\nUsing rule: "))
+    (display P~-step)
+    (display "\nP^ = ")
     (displayln P^)
     (display "P~^ = ")
     (displayln P~^)
@@ -114,6 +115,8 @@
     (for ([i (in-range 1 (add1 n))])
       (display "\t")
       (displayln (step-tag-n i P^)))))
+
+
 
 ;;appN!
 ;(sim-example 5 '(store () ((lambda (x) (set! x 5)) 4)))
@@ -143,19 +146,29 @@
 ;;-
 ;(sim-example 1 '(store () (- 3 4)))
 
-;;Tests
-(test-ca '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
-(test-ca '(store () (+ 3 4)))
-(test-ca '(store () (- 3 4)))
-(test-ca '(store ((x 99)) (begin (set! x 100))))
-(test-ca '(store ((x 5)) (set! x 5)))
+;;;Tests
+(test-ca '(store () ()))
 (test-ca '(store () ((lambda (x) (set! x 5)) 4)))
 (test-ca '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
 (test-ca '(store () (begin (values 5) (lambda (x) (set! x 5)))))
+(test-ca '(store () ((lambda (c) ((lambda (x y) (begin (set-car! x 3) (car y))) c c))(cons 1 2))))
+(test-ca '(store () ((lambda (x) (x x)) (lambda (y) (y y)))))
+(test-ca '(store () ((lambda (x) (begin (x x) (set! x 4))) (lambda (y) (y y)))))
+(test-ca '(store () (lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z)))))))
+(test-ca '(store () (+ 3 4)))
+(test-ca '(store () (- 3 4)))
+(test-ca '(store ((x 5)) ()))
+(test-ca '(store ((y (lambda (x) (+ x 4)))) ()))
+(test-ca '(store ((y (lambda (x) (set! x 2)))) ()))
+(test-ca '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
+(test-ca '(store ((y (lambda (x) x))) (y 3)))
+(test-ca '(store ((x 5)) (begin null x)))
+(test-ca '(store ((x 99)) (begin (set! x 100))))
+(test-ca '(store ((x 5)) (set! x 5)))
+;(test-ca '(store ((x 4) (y 6)) (begin (set! x 5) (set! y 7) (+ x y)))) problem with (apply append +) in replace
 (test-ca '(store (((-mp bp) (cons 4 null))) ((lambda () (begin (set-car! (-mp bp) 5) (car (-mp bp)))))))
 (test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null)))(begin (car (-mp x)))))
 (test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) (car (-mp x))))
-
 
 
 
