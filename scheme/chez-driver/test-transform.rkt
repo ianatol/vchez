@@ -5,6 +5,7 @@
          "../rvrs2.rkt"
          "../transform.rkt")
 
+;;Single step using the R6RS semantics
 (define (step prog)
   (let ([prog~ (apply-reduction-relation
                 reductions
@@ -13,6 +14,7 @@
       ['() '()]
       [res (car res)])))
 
+;;Single R6RS step that also tells us what step it took
 (define (step-tag prog)
   (let ([prog~ (apply-reduction-relation/tag-with-names
                 reductions
@@ -21,25 +23,39 @@
       ['() '()]
       [res (car res)])))
 
+;;Single step n times
 (define (step-n n prog)
   (if (equal? n 1)
       (step prog)
       (step (step-n (sub1 n) prog))))
 
+(define (step-n-all n prog)
+  (if (>= n 1)
+      (cons (step-n n prog) (step-n-all (sub1 n) prog))
+      '()))
+
+;;Single step n times and give info on the last step taken
 (define (step-tag-n n prog)
     (if (equal? n 1)
       (step-tag prog)
       (step-tag (step-n (sub1 n) prog))))
 
+;;Trans., reflexive closure of single step (i.e. zero or more steps)
 (define (step* prog)
   (apply-reduction-relation*
    reductions
    prog
    #:all? #t))
 
+;;Normalize each of a list of programs
 (define (normalize* progs)
   (map normalize progs))
 
+;;Display a program P,
+;;P stepping once (P~),
+;;P stepping once then transforming (P~^),
+;;transforming P with convert-assignments (P^),
+;;and P^ stepping zero or more times (P^~*)
 (define (show-Ps prog)
   (displayln 'P)
   (displayln prog)
@@ -52,12 +68,14 @@
   (displayln 'P^~*)
   (display (step* (ca/prog prog))))
 
+
+;;Takes a program and compares P~^ and P^~
 (define (test-ca-single prog)
   (check-equal?
-   (ca/prog (step prog))
-   (step (ca/prog prog))))
+   (normalize (ca/prog (step prog)))
+   (normalize (step (ca/prog prog)))))
 
-;Checks if P hat takes one or more steps to P prime hat
+;;Takes a program and compares P~^ and P^~*
 (define (test-ca-many prog)
   (check-not-equal?
    (let* ([P~ (step prog)] ;P prime
@@ -66,11 +84,12 @@
     (member (normalize P~^) (normalize* (step* P^))))
    #f))
 
-(test-ca-single '(store () (+ 3 4)))
-(test-ca-many '(store ((x 5)) (set! x 4)))
-(test-ca-single '(store ((x 5)) (set! x 4)))
-(test-ca-many '(store () ((lambda (x) (set! x 5)) 4)))
-;(test-ca-many '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
+;;Takes a program and compares P~^ and P^* limited to 5 steps
+(define (test-ca prog)
+  (let* ([P~ (step prog)]
+         [P^ (ca/prog prog)]
+         [P~^ (ca/prog P~)])
+    (check member (normalize P~^) (normalize* (step-n-all 5 P^)))))
 
 ;Generates an example of ca being a simulation relation
 ; n is the number of steps that a transformed program takes to get to the program resulting from a single step and then transforming
@@ -123,6 +142,20 @@
 
 ;;-
 ;(sim-example 1 '(store () (- 3 4)))
+
+;;Tests
+(test-ca '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
+(test-ca '(store () (+ 3 4)))
+(test-ca '(store () (- 3 4)))
+(test-ca '(store ((x 99)) (begin (set! x 100))))
+(test-ca '(store ((x 5)) (set! x 5)))
+(test-ca '(store () ((lambda (x) (set! x 5)) 4)))
+(test-ca '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
+(test-ca '(store () (begin (values 5) (lambda (x) (set! x 5)))))
+(test-ca '(store (((-mp bp) (cons 4 null))) ((lambda () (begin (set-car! (-mp bp) 5) (car (-mp bp)))))))
+(test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null)))(begin (car (-mp x)))))
+(test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) (car (-mp x))))
+
 
 
 

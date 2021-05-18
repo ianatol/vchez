@@ -5,27 +5,13 @@
 (provide ca/prog
          normalize)
 
-;; okay, let's write a version of this that works on programs that
-;; aren't already decomposed into an evaluation context and a redex....
-
-;; 1) don't use flatten, it's gross :). Just handle the lists correctly
-;;   in their construction. See note in e-as
-;; 2) you're missing parentheses around the argument in lambdas. This will
-;;   prevent all the terms from running correctly; that means something
-;;   entirely different in scheme.
-;; 3) just use "lambda", not λ. The R6RS reduction semantics doesn't
-;;   include this shorthand and all the test cases will fail.
-;; 4) I still haven't taken a close enough look to see why (+ 3 4)
-;;   is transformed into (+ ((car 3) 4)), but there's definitely at
-;;   least one bug there, I'll warrant.
-
 ;; given a program, return the annotated version of it
 (define (ca/prog prog)
   (match prog
     [`(store (,sfs ...) ,e)
      (let ([as (get-assignments/exp sfs e)]
            [bs (get-bounds/exp sfs e)])
-       `(store ,(map (λ (x) (ca/sf x as bs)) sfs) ,(ca/e e as bs)))]
+       `(store ,(map (λ (x) (ca/sf x as bs)) sfs) ,(ca/exp e as bs)))]
     [u u]))
 
 (define (names prog)
@@ -35,86 +21,94 @@
     [u u]))
 
 
-;; want a version of this that just takes an expression:
-(define (get-assignments/exp store e)
-  (flatten (append (map as/sf store) (as/e e))))
+;;These functions retrieve various names from a store and an expression:
 
-(define (get-bounds/exp store e)
-  (flatten (append (map bs/sf store) (bs/e e))))
+;Gets variables that are in the store and/or the target of a set!
+(define (get-assignments/exp store e)
+  (flatten (append (map as/sf store) (as/exp e))))
 
 (define (get-assignments store E e)
-  (flatten (append (map as/sf store) (append (as/E E) (as/e e)))))
+  (flatten (append (map as/sf store) (append (as/E E) (as/exp e)))))
+
+;Gets variables that are bound by a lambda
+(define (get-bounds/exp store e)
+  (flatten (append (map bs/sf store) (bs/exp e))))
 
 (define (get-bounds store E e)
-  (flatten (append (map bs/sf store) (append (bs/E E) (bs/e e)))))
+  (flatten (append (map bs/sf store) (append (bs/E E) (bs/exp e)))))
 
+;Gets all names of variables and removes duplicates
 (define (get-names store e)
   (remove-duplicates (flatten (append (map names/sf store) (names/exp e)))))
 
+
+;;Helper functions for get-assignments
 (define (as/sf sf)
   (match sf
-    [`((-mp ,x) ,v) (as/e v)]
-    [`(,x ,v) (cons x (as/e v))]
-    [u '()]))
-
-(define (bs/sf sf)
-  (match sf
-    [`((-mp ,x) ,v) (bs/e v)]
-    [`(,x ,v) (bs/e v)]
+    [`((-mp ,x) ,v) (as/exp v)]
+    [`(,x ,v) (cons x (as/exp v))]
     [u '()]))
 
 (define (as/E E)
   (match E
     ['[] '()]
     [`(set! ,x ,E1) (cons x (as/E E1))]
-    [`(begin ,E1 ,e1 ,e2 ...) (append (as/E E1) (append (as/e e1) (map as/e e2)))]
-    [`(,v1 ... ,E1 ,v2 ...) (append (as/E E1) (append (map as/e v1) (map as/e v2)))]))
+    [`(begin ,E1 ,e1 ,e2 ...) (append (as/E E1) (append (as/exp e1) (map as/exp e2)))]
+    [`(,v1 ... ,E1 ,v2 ...) (append (as/E E1) (append (map as/exp v1) (map as/exp v2)))]))
+
+(define (as/es es)
+  (map as/exp es))
+
+(define (as/exp e)
+  (match e
+    [`(begin ,v1 ... ,e1 ,e2 ...) (append (apply append (as/es v1)) (append (as/exp e1) (apply append (as/es e2))))]
+    [`(begin ,e1 ,e2 ...) (append  (as/exp e1) (apply append (as/es e2)))]
+    [`(set! ,x ,e1) (cons x (as/exp e1))]
+    [`(lambda () ,e1) (as/exp e1)]
+    [`(lambda (,x) ,e1) (as/exp e1)]
+    [`(,op ,e1 ,e2)
+     #:when (member op '(+ - / *))
+     (append (as/exp e1) (as/exp e2))]
+    [`(,e1) (as/exp e1)]
+    [`(values ,v1) (as/exp v1)]
+    [`(,e1 ,e2 ...) (append (as/exp e1) (apply append (as/es e2)))]
+    [_ '()]))
+
+
+;;Helper functions for get-bounds
+(define (bs/sf sf)
+  (match sf
+    [`((-mp ,x) ,v) (bs/exp v)]
+    [`(,x ,v) (bs/exp v)]
+    [u '()]))
 
 (define (bs/E E)
   (match E
     ['[] '()]
     [`(set! ,x ,E1) (bs/E E1)]
-    [`(begin ,E1 ,e1 ,e2 ...) (append (bs/E E1) (append (bs/e e1) (map bs/e e2)))]
-    [`(,v1 ... ,E1 ,v2 ...) (append (bs/E E1) (append (map bs/e v1) (map bs/e v2)))]))
-
-(define (as/es es)
-  (map as/e es))
-
-;;Finds variables that are the target of a set! in e
-(define (as/e e)
-  (match e
-    [`(begin ,v1 ... ,e1 ,e2 ...) (append (apply append (as/es v1)) (append (as/e e1) (apply append (as/es e2))))]
-    [`(begin ,e1 ,e2 ...) (append  (as/e e1) (apply append (as/es e2)))]
-    [`(set! ,x ,e1) (cons x (as/e e1))]
-    [`(lambda () ,e1) (as/e e1)]
-    [`(lambda (,x) ,e1) (as/e e1)]
-    [`(,op ,e1 ,e2)
-     #:when (member op '(+ - / *))
-     (append (as/e e1) (as/e e2))]
-    [`(,e1) (as/e e1)]
-    [`(values ,v1) (as/e v1)]
-    [`(,e1 ,e2 ...) (append (as/e e1) (apply append (as/es e2)))]
-    [_ '()]))
+    [`(begin ,E1 ,e1 ,e2 ...) (append (bs/E E1) (append (bs/exp e1) (map bs/exp e2)))]
+    [`(,v1 ... ,E1 ,v2 ...) (append (bs/E E1) (append (map bs/exp v1) (map bs/exp v2)))]))
 
 (define (bs/es es)
-  (map bs/e es))
+  (map bs/exp es))
 
-;;Finds bound variables in e
-(define (bs/e e)
+(define (bs/exp e)
   (match e
-    [`(begin ,v1 ... ,e1 ,e2 ...) (append (apply append (bs/es v1)) (append (bs/e e1) (apply append (bs/es e2))))]
-    [`(begin ,e1 ,e2 ...) (append  (bs/e e1) (apply append (bs/es e2)))]
-    [`(set! ,x ,e1) (bs/e e1)]
-    [`(lambda () ,e1) (bs/e e1)]
-    [`(lambda (,x) ,e1) (cons x (bs/e e1))]
+    [`(begin ,v1 ... ,e1 ,e2 ...) (append (apply append (bs/es v1)) (append (bs/exp e1) (apply append (bs/es e2))))]
+    [`(begin ,e1 ,e2 ...) (append  (bs/exp e1) (apply append (bs/es e2)))]
+    [`(set! ,x ,e1) (bs/exp e1)]
+    [`(lambda () ,e1) (bs/exp e1)]
+    [`(lambda (,x) ,e1) (cons x (bs/exp e1))]
     [`(,op ,e1 ,e2)
      #:when (member op '(+ - / *))
-     (append (bs/e e1) (bs/e e2))]
-    [`(,e1) (bs/e e1)]
-    [`(values ,v1) (bs/e v1)]
-    [`(,e1 ,e2 ...) (append (bs/e e1) (apply append (bs/es e2)))]
+     (append (bs/exp e1) (bs/exp e2))]
+    [`(,e1) (bs/exp e1)]
+    [`(values ,v1) (bs/exp v1)]
+    [`(,e1 ,e2 ...) (append (bs/exp e1) (apply append (bs/es e2)))]
     [_ '()]))
 
+
+;;Helper functions for names
 (define (names/sf sf)
   (match sf
     [`((-mp ,x) ,v) `(,x ,(names/exp v))]
@@ -152,6 +146,9 @@
      `(,(names/exp e1) ,(names/exps e2))]
     [x (list x)]))
 
+
+;;Normalizes a program wrt alpha equivalence
+;;I.e. renames such that two programs that are alpha equivalent should normalize to the same program
 (define (normalize prog)
   (norm-helper prog (names prog) 1))
 
@@ -187,9 +184,9 @@
 (define (replace/exp x n e)
   (match e
     [`(begin ,v1 ... ,e1 ,e2 ...)
-     `(begin ,(apply append (replace/exps x n v1)) ,(replace/exp x n e1) ,(apply append (replace/exps x n e2)))]
+     (remove* (list '())`(begin ,(apply append (replace/exps x n v1)) ,(replace/exp x n e1) ,(apply append (replace/exps x n e2))))]
     [`(begin ,e1 ,e2 ...)
-     `(begin ,(replace/exp x n e1),(apply append (replace/exps x n e2)))]
+     (remove* (list '()) `(begin ,(replace/exp x n e1),(apply append (replace/exps x n e2))))]
     [`(set! ,z ,e1)
      #:when (eq? z x)
      `(set! ,(gen-var-sym n) ,(replace/exp x n e1))]
@@ -208,17 +205,13 @@
      `(,(replace/exp x n e1) ,(replace/exp x n e2) ,(replace/exp x n e3))]
     [`(,e1) `(,(replace/exp x n e1))]
     [`(,e1 ,e2 ...)
-     `(,(replace/exp x n e1) ,(apply append (replace/exps x n e2)))]
+     (remove* (list '()) `(,(replace/exp x n e1) ,(apply append (replace/exps x n e2))))]
     [z
      #:when (eq? z x)
      (gen-var-sym n)]
     [u u]))
   
   
-    
-
-
-
 ;given a program decomposed into eval ctx and expression,
 ;gives back a program with the expression plugged into the eval ctx
 (define (recomp/prog prog)
@@ -242,7 +235,9 @@
     [`(store (,sfs ...) ,E [ ,e ])
      (let ([as (get-assignments sfs E e)]
            [bs (get-bounds sfs E e)])
-       `(store ,(map (λ (x) (ca/sf x as bs)) sfs) ,(ca/E E as bs) [ ,(ca/e e as bs) ]))]))
+       `(store ,(map (λ (x) (ca/sf x as bs)) sfs) ,(ca/E E as bs) [ ,(ca/exp e as bs) ]))]))
+
+
 
 (define (val? e)
   (match e
@@ -261,13 +256,11 @@
   (andmap val? es))
 
 
-
-
 ;;convert-assignments pass
 (define (ca/sf sf as bs)
   (match sf
-    [`((-mp ,x) ,v) `((-mp ,x) ,(ca/e v as bs))]
-    [`(,x ,v) `((-mp ,x) (cons ,(ca/e v as bs) null))]
+    [`((-mp ,x) ,v) `((-mp ,x) ,(ca/exp v as bs))]
+    [`(,x ,v) `((-mp ,x) (cons ,(ca/exp v as bs) null))]
     [u u]))
 
 (define (ca/E E as bs)
@@ -278,13 +271,13 @@
      `(set-car! ,x ,(ca/E E1 as bs))]
     [`(set! ,x ,E1)
      `(set-car! (-mp ,x) ,(ca/E E1 as bs))]
-    [`(begin ,E1 ,e1 ,e2 ...) `(begin ,(ca/E E1 as bs) ,(ca/e e1 as bs) ,(ca/es e2 as bs))]
-    [`(,v1 ... ,E1 ,v2 ...) `(,(ca/es v1 as bs) ,(ca/E E1 as bs) ,(ca/es v2 as bs))]))
+    [`(begin ,E1 ,e1 ,e2 ...) `(begin ,(ca/E E1 as bs) ,(ca/exp e1 as bs) ,(ca/exps e2 as bs))]
+    [`(,v1 ... ,E1 ,v2 ...) `(,(ca/exps v1 as bs) ,(ca/E E1 as bs) ,(ca/exps v2 as bs))]))
 
-(define (ca/es es as bs)
-  (map (λ (x) (ca/e x as bs)) es))
+(define (ca/exps es as bs)
+  (map (λ (x) (ca/exp x as bs)) es))
 
-(define (ca/e e as bs)
+(define (ca/exp e as bs)
   (match e
     ;;transformations
     
@@ -301,38 +294,38 @@
     ;if x is not bound, change to mutable pointer
     [`(set! ,x ,e1)
      #:when (not (member x bs)) 
-     `(set-car! (-mp ,x) ,(ca/e e1 as bs))]
+     `(set-car! (-mp ,x) ,(ca/exp e1 as bs))]
 
     [`(set! ,x ,e1)
-     `(set-car! ,x ,(ca/e e1 as bs))]
+     `(set-car! ,x ,(ca/exp e1 as bs))]
 
     [`(lambda (,x) ,e1)
      #:when (member x as)
      `(lambda (t)
-        ((lambda (,x) ,(ca/e e1 as bs))(cons t null)))]
+        ((lambda (,x) ,(ca/exp e1 as bs))(cons t null)))]
 
     ;;recursion
     [`(begin ,v1 ... ,e1 ,e2 ...)
      #:when (vals? v1)
-     (remove* (list '()) `(begin ,(apply append (ca/es v1 as bs)) ,(ca/e e1 as bs) ,(apply append (ca/es e2 as bs))))]
+     (remove* (list '()) `(begin ,(apply append (ca/exps v1 as bs)) ,(ca/exp e1 as bs) ,(apply append (ca/exps e2 as bs))))]
     [`(begin ,e1 ,e2 ...)
-     (remove* (list '()) `(begin ,(ca/e e1 as bs) ,(apply append (ca/es e2 as bs))))]
+     (remove* (list '()) `(begin ,(ca/exp e1 as bs) ,(apply append (ca/exps e2 as bs))))]
     [`(lambda () ,e1)
-     `(lambda () ,(ca/e e1 as bs))]
+     `(lambda () ,(ca/exp e1 as bs))]
     [`(lambda (,x) ,e1)
-     `(lambda (,x) ,(ca/e e1 as bs))]
+     `(lambda (,x) ,(ca/exp e1 as bs))]
     [`(,e1 ,e2 ,e3)
-     `(,(ca/e e1 as bs) ,(ca/e e2 as bs) ,(ca/e e3 as bs))]
+     `(,(ca/exp e1 as bs) ,(ca/exp e2 as bs) ,(ca/exp e3 as bs))]
     [n
      #:when (integer? n)
      n]
     [`(,e1 ,e2 ...)
      #:when (not (empty? e2))
-     (remove* (list '()) `(,(ca/e e1 as bs) ,(apply append (ca/es e2 as bs))))]
+     (remove* (list '()) `(,(ca/exp e1 as bs) ,(apply append (ca/exps e2 as bs))))]
     [`(,e1)
-     `(,(ca/e e1 as bs))]
+     `(,(ca/exp e1 as bs))]
     [`(values ,v1)
-     `(values ,(ca/e v1 as bs))]
+     `(values ,(ca/exp v1 as bs))]
     [u u]))
 
 
