@@ -93,6 +93,21 @@
          [P~^ (ca/prog P~)])
     (check member (normalize P~^) (normalize* (step-n-all 5 P^)))))
 
+;;Takes a program and calls test-ca on it.
+;;Then, step with the program and recurse until a step limit or no step available
+(define (full-test-ca prog)
+  (check-equal? #t (full-test-ca-helper prog 10)))
+
+(define (full-test-ca-helper prog step-limit)
+  (if (eq? step-limit 0)
+      #t
+      (match prog
+        ['() #t]
+        [P (begin (test-ca P)
+                  (full-test-ca-helper (step P) (sub1 step-limit)))])))
+    
+     
+
 ;Generates an example of ca being a simulation relation
 ; n is the number of steps that a transformed program takes to get to the program resulting from a single step and then transforming
 ; prog is a program that takes a step using the desired rule
@@ -147,28 +162,51 @@
 ;(sim-example 1 '(store () (- 3 4)))
 
 ;;;Tests
-(test-ca '(store () ()))
-(test-ca '(store () ((lambda (x) (set! x 5)) 4)))
-(test-ca '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
-(test-ca '(store () (begin (values 5) (lambda (x) (set! x 5)))))
-(test-ca '(store () ((lambda (c) ((lambda (x y) (begin (set-car! x 3) (car y))) c c))(cons 1 2))))
-(test-ca '(store () ((lambda (x) (x x)) (lambda (y) (y y)))))
-(test-ca '(store () ((lambda (x) (begin (x x) (set! x 4))) (lambda (y) (y y)))))
-(test-ca '(store () (lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z)))))))
-(test-ca '(store () (+ 3 4)))
-(test-ca '(store () (- 3 4)))
-(test-ca '(store ((x 5)) ()))
-(test-ca '(store ((y (lambda (x) (+ x 4)))) ()))
-(test-ca '(store ((y (lambda (x) (set! x 2)))) ()))
-(test-ca '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
-(test-ca '(store ((y (lambda (x) x))) (y 3)))
-(test-ca '(store ((x 5)) (begin null x)))
-(test-ca '(store ((x 99)) (begin (set! x 100))))
-(test-ca '(store ((x 5)) (set! x 5)))
+;(test-ca '(store () ()))
+;(test-ca '(store () ((lambda (x) (set! x 5)) 4)))
+;(test-ca '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
+;(test-ca '(store () (begin (values 5) (lambda (x) (set! x 5)))))
+;(test-ca '(store () ((lambda (c) ((lambda (x y) (begin (set-car! x 3) (car y))) c c))(cons 1 2))))
+;(test-ca '(store () ((lambda (x) (x x)) (lambda (y) (y y)))))
+;(test-ca '(store () ((lambda (x) (begin (x x) (set! x 4))) (lambda (y) (y y)))))
+;(test-ca '(store () (lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z)))))))
+;(test-ca '(store () (+ 3 4)))
+;(test-ca '(store () (- 3 4)))
+;(test-ca '(store ((x 5)) ()))
+;(test-ca '(store ((y (lambda (x) (+ x 4)))) ()))
+;(test-ca '(store ((y (lambda (x) (set! x 2)))) ()))
+;(test-ca '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
+;(test-ca '(store ((y (lambda (x) x))) (y 3)))
+;(test-ca '(store ((x 5)) (begin null x)))
+;(test-ca '(store ((x 99)) (begin (set! x 100))))
+;(test-ca '(store ((x 5)) (set! x 5)))
+;;(test-ca '(store ((x 4) (y 6)) (begin (set! x 5) (set! y 7) (+ x y)))) problem with (apply append +) in replace
+;(test-ca '(store (((-mp bp) (cons 4 null))) ((lambda () (begin (set-car! (-mp bp) 5) (car (-mp bp)))))))
+;(test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null)))(begin (car (-mp x)))))
+;(test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) (car (-mp x))))
+
+(full-test-ca '(store () ()))
+(full-test-ca '(store () ((lambda (x) (set! x 5)) 4)))
+(full-test-ca '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
+(full-test-ca '(store () (begin (values 5) (lambda (x) (set! x 5)))))
+(full-test-ca '(store () ((lambda (c) ((lambda (x y) (begin (set-car! x 3) (car y))) c c))(cons 1 2))))
+(full-test-ca '(store () ((lambda (x) (x x)) (lambda (y) (y y)))))
+(full-test-ca '(store () ((lambda (x) (begin (x x) (set! x 4))) (lambda (y) (y y)))))
+(full-test-ca '(store () (lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z)))))))
+(full-test-ca '(store () (+ 3 4)))
+(full-test-ca '(store () (- 3 4)))
+(full-test-ca '(store ((x 5)) ()))
+(full-test-ca '(store ((y (lambda (x) (+ x 4)))) ()))
+(full-test-ca '(store ((y (lambda (x) (set! x 2)))) ()))
+(full-test-ca '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
+(full-test-ca '(store ((y (lambda (x) x))) (y 3)))
+(full-test-ca '(store ((x 5)) (begin null x)))
+(full-test-ca '(store ((x 99)) (begin (set! x 100))))
+(full-test-ca '(store ((x 5)) (set! x 5)))
 ;(test-ca '(store ((x 4) (y 6)) (begin (set! x 5) (set! y 7) (+ x y)))) problem with (apply append +) in replace
-(test-ca '(store (((-mp bp) (cons 4 null))) ((lambda () (begin (set-car! (-mp bp) 5) (car (-mp bp)))))))
-(test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null)))(begin (car (-mp x)))))
-(test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) (car (-mp x))))
+(full-test-ca '(store (((-mp bp) (cons 4 null))) ((lambda () (begin (set-car! (-mp bp) 5) (car (-mp bp)))))))
+(full-test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null)))(begin (car (-mp x)))))
+(full-test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) (car (-mp x))))
 
 
 
