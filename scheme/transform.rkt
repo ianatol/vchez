@@ -21,23 +21,23 @@
     [u u]))
 
 
-;;These functions retrieve various names from a store and an expression:
+;;These functions retrieve various sets of names from a store and an expression:
 
-;Gets variables that are in the store and/or the target of a set!
+;Get names that are in the store and/or the target of a set!
 (define (get-assignments/exp store e)
   (flatten (append (map as/sf store) (as/exp e))))
 
 (define (get-assignments store E e)
   (flatten (append (map as/sf store) (append (as/E E) (as/exp e)))))
 
-;Gets variables that are bound by a lambda
+;Get names that are bound by a lambda
 (define (get-bounds/exp store e)
   (flatten (append (map bs/sf store) (bs/exp e))))
 
 (define (get-bounds store E e)
   (flatten (append (map bs/sf store) (append (bs/E E) (bs/exp e)))))
 
-;Gets all names of variables and removes duplicates
+;Get all unique names
 (define (get-names store e)
   (remove-duplicates (flatten (append (map names/sf store) (names/exp e)))))
 
@@ -176,19 +176,20 @@
      #:when (eq? z x)
      `((-mp ,(gen-var-sym n)) ,(replace/exp x n v))]
     [`((-mp ,z) ,v)
-     `((-mp ,z) ,(replace/exp x n v))]))
+     `((-mp ,z) ,(replace/exp x n v))]
+    [`(,z ,v)
+     #:when (eq? z x)
+     `(,(gen-var-sym n) ,(replace/exp x n v))]
+    [`(,z ,v)
+     `(,z ,(replace/exp x n v))]))
 
 (define (replace/exps x n es)
-  (match es
-    [`(,e) (list (replace/exp x n e))]
-    [es_ (map (λ (e) (replace/exp x n e)) es_)]))
+  (map (λ (e) (replace/exp x n e)) es))
 
 (define (replace/exp x n e)
   (match e
-    [`(begin ,v1 ... ,e1 ,e2 ...)
-     (remove* (list '())`(begin ,(apply append (replace/exps x n v1)) ,(replace/exp x n e1) ,(apply append (replace/exps x n e2))))]
     [`(begin ,e1 ,e2 ...)
-     (remove* (list '()) `(begin ,(replace/exp x n e1),(apply append (replace/exps x n e2))))]
+     (remove* (list '()) (append `(begin ,(replace/exp x n e1)) (replace/exps x n e2)))]
     [`(set! ,z ,e1)
      #:when (eq? z x)
      `(set! ,(gen-var-sym n) ,(replace/exp x n e1))]
@@ -205,9 +206,9 @@
      `(values ,(replace/exp x n v1))]
     [`(,e1 ,e2 ,e3)
      `(,(replace/exp x n e1) ,(replace/exp x n e2) ,(replace/exp x n e3))]
-    [`(,e1) `(,(replace/exp x n e1))]
+    #;[`(,e1) `(,(replace/exp x n e1))]
     [`(,e1 ,e2 ...)
-     (remove* (list '()) `(,(replace/exp x n e1) ,(apply append (replace/exps x n e2))))]
+     (remove* (list '()) (append `(,(replace/exp x n e1)) (replace/exps x n e2)))]
     [z
      #:when (eq? z x)
      (gen-var-sym n)]
@@ -238,8 +239,6 @@
      (let ([as (get-assignments sfs E e)]
            [bs (get-bounds sfs E e)])
        `(store ,(map (λ (x) (ca/sf x as bs)) sfs) ,(ca/E E as bs) [ ,(ca/exp e as bs) ]))]))
-
-
 
 (define (val? e)
   (match e
@@ -307,11 +306,8 @@
         ((lambda (,x) ,(ca/exp e1 as bs))(cons t null)))]
 
     ;;recursion
-    [`(begin ,v1 ... ,e1 ,e2 ...)
-     #:when (vals? v1)
-     (remove* (list '()) `(begin ,(apply append (ca/exps v1 as bs)) ,(ca/exp e1 as bs) ,(apply append (ca/exps e2 as bs))))]
     [`(begin ,e1 ,e2 ...)
-     (remove* (list '()) `(begin ,(ca/exp e1 as bs) ,(apply append (ca/exps e2 as bs))))]
+     (remove* (list '()) (append `(begin ,(ca/exp e1 as bs)) (ca/exps e2 as bs)))]
     [`(lambda () ,e1)
      `(lambda () ,(ca/exp e1 as bs))]
     [`(lambda (,x) ,e1)
@@ -323,7 +319,7 @@
      n]
     [`(,e1 ,e2 ...)
      #:when (not (empty? e2))
-     (remove* (list '()) `(,(ca/exp e1 as bs) ,(apply append (ca/exps e2 as bs))))]
+     (remove* (list '()) (append `(,(ca/exp e1 as bs)) (ca/exps e2 as bs)))]
     [`(,e1)
      `(,(ca/exp e1 as bs))]
     [`(values ,v1)

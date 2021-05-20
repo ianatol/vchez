@@ -160,29 +160,6 @@
 ;(sim-example 1 '(store () (- 3 4)))
 
 ;;;Tests
-;(test-ca '(store () ()))
-;(test-ca '(store () ((lambda (x) (set! x 5)) 4)))
-;(test-ca '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
-;(test-ca '(store () (begin (values 5) (lambda (x) (set! x 5)))))
-;(test-ca '(store () ((lambda (c) ((lambda (x y) (begin (set-car! x 3) (car y))) c c))(cons 1 2))))
-;(test-ca '(store () ((lambda (x) (x x)) (lambda (y) (y y)))))
-;(test-ca '(store () ((lambda (x) (begin (x x) (set! x 4))) (lambda (y) (y y)))))
-;(test-ca '(store () (lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z)))))))
-;(test-ca '(store () (+ 3 4)))
-;(test-ca '(store () (- 3 4)))
-;(test-ca '(store ((x 5)) ()))
-;(test-ca '(store ((y (lambda (x) (+ x 4)))) ()))
-;(test-ca '(store ((y (lambda (x) (set! x 2)))) ()))
-;(test-ca '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
-;(test-ca '(store ((y (lambda (x) x))) (y 3)))
-;(test-ca '(store ((x 5)) (begin null x)))
-;(test-ca '(store ((x 99)) (begin (set! x 100))))
-;(test-ca '(store ((x 5)) (set! x 5)))
-;;(test-ca '(store ((x 4) (y 6)) (begin (set! x 5) (set! y 7) (+ x y)))) problem with (apply append +) in replace
-;(test-ca '(store (((-mp bp) (cons 4 null))) ((lambda () (begin (set-car! (-mp bp) 5) (car (-mp bp)))))))
-;(test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null)))(begin (car (-mp x)))))
-;(test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) (car (-mp x))))
-
 (full-test-ca '(store () ()))
 (full-test-ca '(store () ((lambda (x) (set! x 5)) 4)))
 (full-test-ca '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
@@ -201,7 +178,7 @@
 (full-test-ca '(store ((x 5)) (begin null x)))
 (full-test-ca '(store ((x 99)) (begin (set! x 100))))
 (full-test-ca '(store ((x 5)) (set! x 5)))
-;(test-ca '(store ((x 4) (y 6)) (begin (set! x 5) (set! y 7) (+ x y)))) problem with (apply append +) in replace
+(full-test-ca '(store ((x 4) (y 6)) (begin (set! x 5) (set! y 7) (+ x y))))
 (full-test-ca '(store (((-mp bp) (cons 4 null))) ((lambda () (begin (set-car! (-mp bp) 5) (car (-mp bp)))))))
 (full-test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null)))(begin (car (-mp x)))))
 (full-test-ca '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) (car (-mp x))))
