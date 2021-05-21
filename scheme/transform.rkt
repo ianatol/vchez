@@ -404,7 +404,7 @@
     [`(,e1)
      (let ([res (ca/exp e1 as bs n)])
        `(,(car res)
-         (,(cdr res))))]
+         ,(cdr res)))]
     
     [`(values ,v1)
      (let ([res (ca/exp v1 as bs n)])
@@ -463,6 +463,10 @@
               '(store (((-mp x) (cons 5 null)) ((-mp y) (cons 7 null)))
                       (begin (set-car! (-mp x) 4) (set-car! (-mp y) 3)
                              (begin (+ (car (-mp x)) (car (-mp y))) (- (car (-mp y)) (car (-mp x)))))))
+
+(check-equal? (ca/prog '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
+              '(store (((-mp y) (cons 3 null))) ((lambda (x) (+ x (car (-mp y)))) 5)))
+
 ;sanity checks
 (check-equal? (ca/prog '(store () (+ 3 4)))
               '(store () (+ 3 4)))

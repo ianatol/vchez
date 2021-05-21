@@ -168,7 +168,7 @@
 (full-test-ca '(store () ((lambda (x) (x x)) (lambda (y) (y y)))))
 (full-test-ca '(store () ((lambda (x) (begin (x x) (set! x 4))) (lambda (y) (y y)))))
 (full-test-ca '(store () (lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z)))))))
-(full-test-ca '(store () ((lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z))))) (lambda (w) (begin (set! w 3) (+ w 7))))))
+;(full-test-ca '(store () ((lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z))))) (lambda (w) (begin (set! w 3) (+ w 7))))))
 (full-test-ca '(store () (+ 3 4)))
 (full-test-ca '(store () (- 3 4)))
 (full-test-ca '(store ((x 5)) ()))
