@@ -9,17 +9,29 @@
 (define (ca/prog prog)
   (match prog
     [`(store (,sfs ...) ,e)
-     (let ([as (get-assignments/exp sfs e)]
-           [bs (get-bounds/exp sfs e)])
-       `(store ,(map (λ (x) (ca/sf x as bs)) sfs) ,(ca/exp e as bs)))]
+     (let* ([as (get-assignments/exp sfs e)]
+           [bs (get-bounds/exp sfs e)]
+           [num-ts (length (ts prog))]
+           [store+ (ca/sfs sfs as bs num-ts)]
+           [e+ (ca/exp e as bs (car store+))])
+       (if (empty? (cadr store+))
+           `(store () ,(cadr e+))
+           (append `(store ,(cdr store+) ,(cadr e+)))))]
     [u u]))
 
 (define (names prog)
   (match prog
     [`(store (,sfs ...) ,e)
      (get-names sfs e)]
-    [u u]))
+    [u '()]))
 
+(define (t*? sym)
+  (match (first (string->list (symbol->string sym)))
+    [#\t #t]
+    [_ #f]))
+
+(define (ts prog)
+  (filter t*? (names prog)))
 
 ;;These functions retrieve various sets of names from a store and an expression:
 
@@ -40,6 +52,8 @@
 ;Get all unique names
 (define (get-names store e)
   (remove-duplicates (flatten (append (map names/sf store) (names/exp e)))))
+
+
 
 
 ;;Helper functions for get-assignments
@@ -150,10 +164,10 @@
 ;;Normalizes a program wrt alpha equivalence
 ;;I.e. renames such that two programs that are alpha equivalent should normalize to the same program
 (define (normalize prog)
-  (norm-helper prog (names prog) 1))
+  (norm-helper prog (sort (names prog) string<? #:key symbol->string) 1))
 
-(define (gen-var-sym n)
-  (string->symbol (string-append "i" (number->string n))))
+(define (gen-var-sym s n)
+  (string->symbol (string-append s (number->string n))))
 
 (define (norm-helper prog nmes i)
   (match nmes
@@ -174,12 +188,12 @@
   (match sf
     [`((-mp ,z) ,v)
      #:when (eq? z x)
-     `((-mp ,(gen-var-sym n)) ,(replace/exp x n v))]
+     `((-mp ,(gen-var-sym "i" n)) ,(replace/exp x n v))]
     [`((-mp ,z) ,v)
      `((-mp ,z) ,(replace/exp x n v))]
     [`(,z ,v)
      #:when (eq? z x)
-     `(,(gen-var-sym n) ,(replace/exp x n v))]
+     `(,(gen-var-sym "i" n) ,(replace/exp x n v))]
     [`(,z ,v)
      `(,z ,(replace/exp x n v))]))
 
@@ -192,14 +206,14 @@
      (remove* (list '()) (append `(begin ,(replace/exp x n e1)) (replace/exps x n e2)))]
     [`(set! ,z ,e1)
      #:when (eq? z x)
-     `(set! ,(gen-var-sym n) ,(replace/exp x n e1))]
+     `(set! ,(gen-var-sym "i" n) ,(replace/exp x n e1))]
     [`(set! ,z ,e1)
      `(set! ,z ,(replace/exp x n e1))]
     [`(lambda () ,e1)
      `(lambda () ,(replace/exp x n e1))]
     [`(lambda (,z) ,e1)
      #:when (eq? z x)
-     `(lambda ,(gen-var-sym n) ,(replace/exp x n e1))]
+     `(lambda (,(gen-var-sym "i" n)) ,(replace/exp x n e1))]
     [`(lambda (,z) ,e1)
      `(lambda (,z) ,(replace/exp x n e1))]
     [`(values ,v1)
@@ -211,7 +225,7 @@
      (remove* (list '()) (append `(,(replace/exp x n e1)) (replace/exps x n e2)))]
     [z
      #:when (eq? z x)
-     (gen-var-sym n)]
+     (gen-var-sym "i" n)]
     [u u]))
   
   
@@ -258,73 +272,123 @@
 
 
 ;;convert-assignments pass
-(define (ca/sf sf as bs)
+(define (ca/sfs sfs as bs n)
+  (match sfs
+    ['() `(,n ())]
+    [(cons sf _sfs)
+     (let* ([res_h (ca/sf sf as bs n)]
+           [res_t (ca/sfs _sfs as bs (car res_h))])
+       (remove* (list '()) (append (append `(,(car res_t)) (cdr res_h)) (cdr res_t))))]))
+      
+(define (ca/sf sf as bs n)
   (match sf
-    [`((-mp ,x) ,v) `((-mp ,x) ,(ca/exp v as bs))]
-    [`(,x ,v) `((-mp ,x) (cons ,(ca/exp v as bs) null))]
+    [`((-mp ,x) ,v)
+     (let ([res (ca/exp v as bs n)])
+       `(,(car res) ((-mp ,x) ,(cadr res))))]
+    [`(,x ,v)
+     (let ([res (ca/exp v as bs n)])
+       `(,(car res) ((-mp ,x) (cons ,(cadr res) null))))]
     [u u]))
 
-(define (ca/E E as bs)
+(define (ca/E E as bs n)
   (match E
     [`[] `[]]
     [`(set! ,x ,E1)
      #:when (member x bs)
-     `(set-car! ,x ,(ca/E E1 as bs))]
+     (let ([res (ca/E E1 as bs n)])
+       `(,(car res) (set-car! ,x ,(cadr res))))]
     [`(set! ,x ,E1)
-     `(set-car! (-mp ,x) ,(ca/E E1 as bs))]
-    [`(begin ,E1 ,e1 ,e2 ...) `(begin ,(ca/E E1 as bs) ,(ca/exp e1 as bs) ,(ca/exps e2 as bs))]
-    [`(,v1 ... ,E1 ,v2 ...) `(,(ca/exps v1 as bs) ,(ca/E E1 as bs) ,(ca/exps v2 as bs))]))
+     (let ([res (ca/E E1 as bs n)])
+       `(,(car res) (set-car! (-mp ,x) ,(cadr res))))]
+    [`(begin ,E1 ,e1 ,e2 ...)
+     (let* ([res_E1 (ca/E E1 as bs n)]
+            [res_e1 (ca/exp e1 as bs (car res_E1))]
+            [res_e2 (ca/exps e2 as bs (car res_e1))])
+       `(,(car res_e2) (begin ,(cadr res_E1) ,(cadr res_e1) ,(cadr res_e2))))]
+    [`(,v1 ... ,E1 ,v2 ...)
+     (let* ([res_v1 (ca/exps v1 as bs n)]
+           [res_E1 (ca/E E1 as bs (car res_v1))]
+           [res_v2 (ca/exps v2 as bs (car res_E1))])
+     `(,(car res_v2) (,(cadr res_v1) ,(cadr res_E1) ,(cadr res_v2))))]))
 
-(define (ca/exps es as bs)
-  (map (λ (x) (ca/exp x as bs)) es))
+(define (ca/exps es as bs n)
+  (match es
+    ['() `(,n ())]
+    [(cons e es_)
+     (let* ([res_e (ca/exp e as bs n)]
+            [res_es (ca/exps es_ as bs (car res_e))])
+       `(,(car res_es) ,(cons (cadr res_e) (cadr res_es))))]))
 
-(define (ca/exp e as bs)
+(define (ca/exp e as bs n)
   (match e
     ;;transformations
     
     ;if x is bound and assigned to in this scope, don't change to pointer
     [x
      #:when (and (member x as) (member x bs))
-     `(car ,x)]
+     `(,n (car ,x))]
     
     ;if x is assigned to but not bound (i.e. in store), change to mutable pointer
     [x
      #:when (member x as) 
-     `(car (-mp ,x))]
+     `(,n (car (-mp ,x)))]
 
     ;if x is not bound, change to mutable pointer
     [`(set! ,x ,e1)
-     #:when (not (member x bs)) 
-     `(set-car! (-mp ,x) ,(ca/exp e1 as bs))]
+     #:when (not (member x bs))
+     (let ([res (ca/exp e1 as bs n)])
+       `(,(car res) (set-car! (-mp ,x) ,(cadr res))))]
 
     [`(set! ,x ,e1)
-     `(set-car! ,x ,(ca/exp e1 as bs))]
+     (let ([res (ca/exp e1 as bs n)])
+       `(,(car res) (set-car! ,x ,(cadr res))))]
 
     [`(lambda (,x) ,e1)
      #:when (member x as)
-     `(lambda (t)
-        ((lambda (,x) ,(ca/exp e1 as bs))(cons t null)))]
+     (let ([res (ca/exp e1 as bs (add1 n))]
+           [t (gen-var-sym "t" n)])
+       `(,(car res) (lambda (,t)
+                      ((lambda (,x) ,(cadr res))(cons ,t null)))))]
 
     ;;recursion
     [`(begin ,e1 ,e2 ...)
-     (remove* (list '()) (append `(begin ,(ca/exp e1 as bs)) (ca/exps e2 as bs)))]
+     (let* ([res_e1 (ca/exp e1 as bs n)]
+            [res_e2 (ca/exps e2 as bs (car res_e1))])
+       `(,(car res_e2) (begin ,(cadr res_e1) ,(cadr res_e2))))]
+    
     [`(lambda () ,e1)
-     `(lambda () ,(ca/exp e1 as bs))]
+     (let ([res (ca/exp e1 as bs n)])
+       `(,(car res) (lambda () ,(cadr res))))]
+    
     [`(lambda (,x) ,e1)
-     `(lambda (,x) ,(ca/exp e1 as bs))]
+     (let ([res (ca/exp e1 as bs n)])
+       `(,(car res) (lambda (,x) ,(cadr res))))]
+    
     [`(,e1 ,e2 ,e3)
-     `(,(ca/exp e1 as bs) ,(ca/exp e2 as bs) ,(ca/exp e3 as bs))]
-    [n
-     #:when (integer? n)
-     n]
+     (let* ([res_e1 (ca/exp e1 as bs n)]
+            [res_e2 (ca/exp e2 as bs (car res_e1))]
+            [res_e3 (ca/exp e3 as bs (car res_e2))])
+       `(,(car res_e3) (,(cadr res_e1) ,(cadr res_e2) ,(cadr res_e3))))]
+    
+    [i
+     #:when (integer? i)
+     `(,n ,i)]
+    
     [`(,e1 ,e2 ...)
      #:when (not (empty? e2))
-     (remove* (list '()) (append `(,(ca/exp e1 as bs)) (ca/exps e2 as bs)))]
+     (let* ([res_e1 (ca/exp e1 as bs n)]
+            [res_e2 (ca/exps e2 as bs (car res_e1))])
+       `(,(car res_e2) ,(cadr res_e1) ,(cadr res_e2)))]
+    
     [`(,e1)
-     `(,(ca/exp e1 as bs))]
+     (let ([res (ca/exp e1 as bs n)])
+       `(,(car res) (,(cadr res))))]
+    
     [`(values ,v1)
-     `(values ,(ca/exp v1 as bs))]
-    [u u]))
+     (let ([res (ca/exp v1 as bs n)])
+       `(,(car res) (values ,(cadr res))))]
+    [u
+     `(,n ,u)]))
 
 
 ;;tests
@@ -346,30 +410,30 @@
 
 ;x assigned inside lambda
 (check-equal? (ca/prog '(store () (lambda (x) (set! x 4))))
-              '(store () (lambda (t) ((lambda (x) (set-car! x 4))(cons t null)))))
+              '(store () (lambda (t0) ((lambda (x) (set-car! x 4))(cons t0 null)))))
 
 ;x previously assigned, y assigned inside lambda in store
 (check-equal? (ca/prog '(store ((x (lambda (y) (set! y 5)))) x ))
-              '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null))) (car (-mp x))))
+              '(store (((-mp x) (cons (lambda (t0) ((lambda (y) (set-car! y 5))(cons t0 null))) null))) (car (-mp x))))
 
 ;similar to above
 (check-equal? (ca/prog '(store ((x (lambda (y) (set! y 5))))(begin x)))
-              '(store (((-mp x) (cons (lambda (t) ((lambda (y) (set-car! y 5))(cons t null))) null)))(begin (car (-mp x)))))
+              '(store (((-mp x) (cons (lambda (t0) ((lambda (y) (set-car! y 5))(cons t0 null))) null)))(begin (car (-mp x)))))
 
 ;x assigned in eval context, also shows transforming eval context
 #;(check-equal? (ca/decomp '(store () ((lambda (x) (set! x 4)) [] ) [ y ]))
-                '(store () (((lambda (t) ((lambda (x) (set-car! x 4))(cons t null)))) [] ()) [ y ]))
+                '(store () (((lambda (t0) ((lambda (x) (set-car! x 4))(cons t0 null)))) [] ()) [ y ]))
 
 ;x in store, transforms eval context
 #;(check-equal? (ca/decomp '(store ((x 4)) ((lambda (x) x) [] ) [ y ]))
-                '(store (((-mp x) (cons 4 null))) (((lambda (t) ((lambda (x) (car (-mp x)))(cons t null)))) [] () ) [ y ]))
+                '(store (((-mp x) (cons 4 null))) (((lambda (t0) ((lambda (x) (car (-mp x)))(cons t0 null)))) [] () ) [ y ]))
 
 ;mp in store not transformed
 (check-equal? (ca/prog '(store (((-mp x) (cons 5 null))) (set! y 4)))
               '(store (((-mp x) (cons 5 null))) (set-car! (-mp y) 4)))
 
 (check-equal? (ca/prog '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
-              '(store () ((lambda (t) ((lambda (x) (begin (set-car! x 5) (car x)))(cons t null))) 4)))
+              '(store () ((lambda (t0) ((lambda (x) (begin (set-car! x 5) (car x)))(cons t0 null))) 4)))
                        
 ;sanity checks
 (check-equal? (ca/prog '(store () (+ 3 4)))
