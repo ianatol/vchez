@@ -15,8 +15,8 @@
             [store+ (ca/sfs sfs as bs num-ts)]
             [e+ (ca/exp e as bs (car store+))])
        (if (empty? (cadr store+))
-           `(store () ,(cadr e+))
-           (append `(store ,(cdr store+) ,(cadr e+)))))]
+           (append `(store ()) (cdr e+))
+           (append `(store ,(cdr store+)) (cdr e+))))]
     [u u]))
 
 (define (names prog)
@@ -284,10 +284,12 @@
   (match sf
     [`((-mp ,x) ,v)
      (let ([res (ca/exp v as bs n)])
-       `(,(car res) ((-mp ,x) ,(cadr res))))]
+       `(,(car res)
+         ,(append `((-mp ,x)) (cdr res))))]
     [`(,x ,v)
      (let ([res (ca/exp v as bs n)])
-       `(,(car res) ((-mp ,x) (cons ,(cadr res) null))))]
+       `(,(car res)
+         ((-mp ,x) (cons ,(cadr res) null))))]
     [u u]))
 
 (define (ca/E E as bs n)
@@ -317,7 +319,14 @@
     [(cons e es_)
      (let* ([res_e (ca/exp e as bs n)]
             [res_es (ca/exps es_ as bs (car res_e))])
-       `(,(car res_es) ,(cons (cadr res_e) (cadr res_es))))]))
+       (match (cdr res_es)
+         ['() `(,(car res_es) ,(cdr res_e))]
+         [rest `(,(car res_es) ,(append (cdr res_e) rest))]))]))
+
+(define (unwrap res_tail)
+  (if (eq? (length res_tail) 1)
+      (car res_tail)
+      (map unwrap res_tail)))
 
 (define (ca/exp e as bs n)
   (match e
@@ -340,44 +349,45 @@
      #:when (not (member x bs))
      (let ([res (ca/exp e1 as bs n)])
        `(,(car res)
-         (set-car! (-mp ,x) ,(cadr res))))]
+         ,(append `(set-car! (-mp ,x)) (cdr res))))]
 
     [`(set! ,x ,e1)
      (let ([res (ca/exp e1 as bs n)])
        `(,(car res)
-         (set-car! ,x ,(cadr res))))]
+         ,(append `(set-car! ,x) (cdr res))))]
 
     [`(lambda (,x) ,e1)
      #:when (member x as)
      (let ([res (ca/exp e1 as bs (add1 n))]
            [t (gen-var-sym "t" n)])
        `(,(car res)
-         (lambda (,t)
-           ((lambda (,x) ,(cadr res))(cons ,t null)))))]
+           (lambda (,t) 
+             (,(append `(lambda (,x)) (cdr res))
+             (cons ,t null)))))]
 
     ;;recursion
     [`(begin ,e1 ,e2 ...)
      (let* ([res_e1 (ca/exp e1 as bs n)]
             [res_e2 (ca/exps e2 as bs (car res_e1))])
        `(,(car res_e2)
-         (begin ,(cadr res_e1) ,(cadr res_e2))))]
+         ,(append (append `(begin) (cdr res_e1)) (cdr res_e2))))]
     
     [`(lambda () ,e1)
      (let ([res (ca/exp e1 as bs n)])
        `(,(car res)
-         (lambda () ,(cadr res))))]
+         ,(append `(lambda ()) (cdr res))))]
     
     [`(lambda (,x) ,e1)
      (let ([res (ca/exp e1 as bs n)])
        `(,(car res)
-         (lambda (,x) ,(cadr res))))]
+         ,(append `(lambda (,x)) (cdr res))))]
     
     [`(,e1 ,e2 ,e3)
      (let* ([res_e1 (ca/exp e1 as bs n)]
             [res_e2 (ca/exp e2 as bs (car res_e1))]
             [res_e3 (ca/exp e3 as bs (car res_e2))])
        `(,(car res_e3)
-         (,(cadr res_e1) ,(cadr res_e2) ,(cadr res_e3))))]
+         ,(append (cdr res_e1) (cdr res_e2) (cdr res_e3))))]
     
     [i
      #:when (integer? i)
@@ -389,17 +399,17 @@
      (let* ([res_e1 (ca/exp e1 as bs n)]
             [res_e2 (ca/exps e2 as bs (car res_e1))])
        `(,(car res_e2)
-         (,(cadr res_e1) ,(cadr res_e2))))]
+         ,(append (cdr res_e1) (cdr res_e2))))]
     
     [`(,e1)
      (let ([res (ca/exp e1 as bs n)])
        `(,(car res)
-         (,(cadr res))))]
+         (,(cdr res))))]
     
     [`(values ,v1)
      (let ([res (ca/exp v1 as bs n)])
        `(,(car res)
-         (values ,(cadr res))))]
+         ,(append `(values) (cadr res))))]
     [u
      `(,n
        ,u)]))
