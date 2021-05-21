@@ -315,13 +315,13 @@
 
 (define (ca/exps es as bs n)
   (match es
-    ['() `(,n ())]
+    ['() `(,n)]
     [(cons e es_)
      (let* ([res_e (ca/exp e as bs n)]
             [res_es (ca/exps es_ as bs (car res_e))])
-       (match (cdr res_es)
-         ['() `(,(car res_es) ,(cdr res_e))]
-         [rest `(,(car res_es) ,(append (cdr res_e) rest))]))]))
+        (match (cdr res_es)
+         ['() (append `(,(car res_es)) (remove* (list '())(cdr res_e)))]
+         [rest (append `(,(car res_es)) (remove* (list '()) (append (cdr res_e) rest)))]))]))
 
 (define (unwrap res_tail)
   (if (eq? (length res_tail) 1)
@@ -458,7 +458,11 @@
 
 (check-equal? (ca/prog '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
               '(store () ((lambda (t0) ((lambda (x) (begin (set-car! x 5) (car x)))(cons t0 null))) 4)))
-                       
+
+(check-equal? (ca/prog '(store ((x 5) (y 7)) (begin (set! x 4) (set! y 3) (begin (+ x y) (- y x)))))
+              '(store (((-mp x) (cons 5 null)) ((-mp y) (cons 7 null)))
+                      (begin (set-car! (-mp x) 4) (set-car! (-mp y) 3)
+                             (begin (+ (car (-mp x)) (car (-mp y))) (- (car (-mp y)) (car (-mp x)))))))
 ;sanity checks
 (check-equal? (ca/prog '(store () (+ 3 4)))
               '(store () (+ 3 4)))
