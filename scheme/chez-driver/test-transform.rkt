@@ -169,8 +169,10 @@
 (full-test-ca '(store () ((lambda (x) (begin (x x) (set! x 4))) (lambda (y) (y y)))))
 (full-test-ca '(store () (lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z)))))))
 ;(full-test-ca '(store () ((lambda (x) ((lambda (y) (x (y y)))(lambda (z) (x (z z))))) (lambda (w) (begin (set! w 3) (+ w 7))))))
+;this example will not work because of shadowing of "w"
 (full-test-ca '(store () (+ 3 4)))
 (full-test-ca '(store () (- 3 4)))
+(full-test-ca '(store () (((lambda (x) (lambda (y) (begin (set! x 5) (set! y 7)))) 6) 5)))
 (full-test-ca '(store ((x 5)) ()))
 (full-test-ca '(store ((y (lambda (x) (+ x 4)))) ()))
 (full-test-ca '(store ((y (lambda (x) (set! x 2)))) ()))

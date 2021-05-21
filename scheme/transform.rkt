@@ -164,68 +164,71 @@
 ;;Normalizes a program wrt alpha equivalence
 ;;I.e. renames such that two programs that are alpha equivalent should normalize to the same program
 (define (normalize prog)
-  (norm-helper prog (sort (names prog) string<? #:key symbol->string) 1))
+  (norm-helper prog (sort (names prog) string<? #:key symbol->string) 1 1))
 
 (define (gen-var-sym s n)
   (string->symbol (string-append s (number->string n))))
 
-(define (norm-helper prog nmes i)
+(define (norm-helper prog nmes i t)
   (match nmes
     ['() prog]
     [`(,name ,rest ...)
-     (norm-helper (replace/prog name i prog) rest (add1 i))]))
+     #:when (not (t*? name))
+     (norm-helper (replace/prog name i "i" prog) rest (add1 i) t)]
+    [`(,name ,rest ...)
+     (norm-helper (replace/prog name t "t" prog) rest i (add1 t))]))
 
-(define (replace/prog x n prog)
+(define (replace/prog x n s prog)
   (match prog
     [`(store (,sfs ...) ,e)
-     `(store ,(replace/sfs x n sfs) ,(replace/exp x n e))]
+     `(store ,(replace/sfs x n s sfs) ,(replace/exp x n s e))]
     [u u]))
 
-(define (replace/sfs x n sfs)
-  (map (λ (sf) (replace/sf x n sf)) sfs))
+(define (replace/sfs x n s sfs)
+  (map (λ (sf) (replace/sf x n s sf)) sfs))
 
-(define (replace/sf x n sf)
+(define (replace/sf x n s sf)
   (match sf
     [`((-mp ,z) ,v)
      #:when (eq? z x)
-     `((-mp ,(gen-var-sym "i" n)) ,(replace/exp x n v))]
+     `((-mp ,(gen-var-sym s n)) ,(replace/exp x n s v))]
     [`((-mp ,z) ,v)
-     `((-mp ,z) ,(replace/exp x n v))]
+     `((-mp ,z) ,(replace/exp x n s v))]
     [`(,z ,v)
      #:when (eq? z x)
-     `(,(gen-var-sym "i" n) ,(replace/exp x n v))]
+     `(,(gen-var-sym s n) ,(replace/exp x n s v))]
     [`(,z ,v)
-     `(,z ,(replace/exp x n v))]))
+     `(,z ,(replace/exp x n s v))]))
 
-(define (replace/exps x n es)
-  (map (λ (e) (replace/exp x n e)) es))
+(define (replace/exps x n s es)
+  (map (λ (e) (replace/exp x n s e)) es))
 
-(define (replace/exp x n e)
+(define (replace/exp x n s e)
   (match e
     [`(begin ,e1 ,e2 ...)
-     (remove* (list '()) (append `(begin ,(replace/exp x n e1)) (replace/exps x n e2)))]
+     (remove* (list '()) (append `(begin ,(replace/exp x n s e1)) (replace/exps x n s e2)))]
     [`(set! ,z ,e1)
      #:when (eq? z x)
-     `(set! ,(gen-var-sym "i" n) ,(replace/exp x n e1))]
+     `(set! ,(gen-var-sym s n) ,(replace/exp x n s e1))]
     [`(set! ,z ,e1)
-     `(set! ,z ,(replace/exp x n e1))]
+     `(set! ,z ,(replace/exp x n s e1))]
     [`(lambda () ,e1)
-     `(lambda () ,(replace/exp x n e1))]
+     `(lambda () ,(replace/exp x n s e1))]
     [`(lambda (,z) ,e1)
      #:when (eq? z x)
-     `(lambda (,(gen-var-sym "i" n)) ,(replace/exp x n e1))]
+     `(lambda (,(gen-var-sym s n)) ,(replace/exp x n s e1))]
     [`(lambda (,z) ,e1)
-     `(lambda (,z) ,(replace/exp x n e1))]
+     `(lambda (,z) ,(replace/exp x n s e1))]
     [`(values ,v1)
-     `(values ,(replace/exp x n v1))]
+     `(values ,(replace/exp x n s v1))]
     [`(,e1 ,e2 ,e3)
-     `(,(replace/exp x n e1) ,(replace/exp x n e2) ,(replace/exp x n e3))]
-    #;[`(,e1) `(,(replace/exp x n e1))]
+     `(,(replace/exp x n s e1) ,(replace/exp x n s e2) ,(replace/exp x n s e3))]
+    #;[`(,e1) `(,(replace/exp x n s e1))]
     [`(,e1 ,e2 ...)
-     (remove* (list '()) (append `(,(replace/exp x n e1)) (replace/exps x n e2)))]
+     (remove* (list '()) (append `(,(replace/exp x n s e1)) (replace/exps x n s e2)))]
     [z
      #:when (eq? z x)
-     (gen-var-sym "i" n)]
+     (gen-var-sym s n)]
     [u u]))
   
   
@@ -322,11 +325,6 @@
         (match (cdr res_es)
          ['() (append `(,(car res_es)) (remove* (list '())(cdr res_e)))]
          [rest (append `(,(car res_es)) (remove* (list '()) (append (cdr res_e) rest)))]))]))
-
-(define (unwrap res_tail)
-  (if (eq? (length res_tail) 1)
-      (car res_tail)
-      (map unwrap res_tail)))
 
 (define (ca/exp e as bs n)
   (match e
@@ -466,6 +464,13 @@
 
 (check-equal? (ca/prog '(store ((y 3)) ((lambda (x) (+ x y)) 5)))
               '(store (((-mp y) (cons 3 null))) ((lambda (x) (+ x (car (-mp y)))) 5)))
+
+(check-equal? (ca/prog '(store () (lambda (x) (lambda (y) (begin (set! x 5) (set! y 7))))))
+              '(store () (lambda (t0)
+                           ((lambda (x)
+                              (lambda (t1)
+                                ((lambda (y) (begin (set-car! x 5) (set-car! y 7)))(cons t1 null))))
+                              (cons t0 null)))))
 
 ;sanity checks
 (check-equal? (ca/prog '(store () (+ 3 4)))
