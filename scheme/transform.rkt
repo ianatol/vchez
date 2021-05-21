@@ -10,10 +10,10 @@
   (match prog
     [`(store (,sfs ...) ,e)
      (let* ([as (get-assignments/exp sfs e)]
-           [bs (get-bounds/exp sfs e)]
-           [num-ts (length (ts prog))]
-           [store+ (ca/sfs sfs as bs num-ts)]
-           [e+ (ca/exp e as bs (car store+))])
+            [bs (get-bounds/exp sfs e)]
+            [num-ts (length (ts prog))]
+            [store+ (ca/sfs sfs as bs num-ts)]
+            [e+ (ca/exp e as bs (car store+))])
        (if (empty? (cadr store+))
            `(store () ,(cadr e+))
            (append `(store ,(cdr store+) ,(cadr e+)))))]
@@ -277,7 +277,7 @@
     ['() `(,n ())]
     [(cons sf _sfs)
      (let* ([res_h (ca/sf sf as bs n)]
-           [res_t (ca/sfs _sfs as bs (car res_h))])
+            [res_t (ca/sfs _sfs as bs (car res_h))])
        (remove* (list '()) (append (append `(,(car res_t)) (cdr res_h)) (cdr res_t))))]))
       
 (define (ca/sf sf as bs n)
@@ -307,9 +307,9 @@
        `(,(car res_e2) (begin ,(cadr res_E1) ,(cadr res_e1) ,(cadr res_e2))))]
     [`(,v1 ... ,E1 ,v2 ...)
      (let* ([res_v1 (ca/exps v1 as bs n)]
-           [res_E1 (ca/E E1 as bs (car res_v1))]
-           [res_v2 (ca/exps v2 as bs (car res_E1))])
-     `(,(car res_v2) (,(cadr res_v1) ,(cadr res_E1) ,(cadr res_v2))))]))
+            [res_E1 (ca/E E1 as bs (car res_v1))]
+            [res_v2 (ca/exps v2 as bs (car res_E1))])
+       `(,(car res_v2) (,(cadr res_v1) ,(cadr res_E1) ,(cadr res_v2))))]))
 
 (define (ca/exps es as bs n)
   (match es
@@ -326,69 +326,83 @@
     ;if x is bound and assigned to in this scope, don't change to pointer
     [x
      #:when (and (member x as) (member x bs))
-     `(,n (car ,x))]
+     `(,n
+       (car ,x))]
     
     ;if x is assigned to but not bound (i.e. in store), change to mutable pointer
     [x
      #:when (member x as) 
-     `(,n (car (-mp ,x)))]
+     `(,n
+       (car (-mp ,x)))]
 
     ;if x is not bound, change to mutable pointer
     [`(set! ,x ,e1)
      #:when (not (member x bs))
      (let ([res (ca/exp e1 as bs n)])
-       `(,(car res) (set-car! (-mp ,x) ,(cadr res))))]
+       `(,(car res)
+         (set-car! (-mp ,x) ,(cadr res))))]
 
     [`(set! ,x ,e1)
      (let ([res (ca/exp e1 as bs n)])
-       `(,(car res) (set-car! ,x ,(cadr res))))]
+       `(,(car res)
+         (set-car! ,x ,(cadr res))))]
 
     [`(lambda (,x) ,e1)
      #:when (member x as)
      (let ([res (ca/exp e1 as bs (add1 n))]
            [t (gen-var-sym "t" n)])
-       `(,(car res) (lambda (,t)
-                      ((lambda (,x) ,(cadr res))(cons ,t null)))))]
+       `(,(car res)
+         (lambda (,t)
+           ((lambda (,x) ,(cadr res))(cons ,t null)))))]
 
     ;;recursion
     [`(begin ,e1 ,e2 ...)
      (let* ([res_e1 (ca/exp e1 as bs n)]
             [res_e2 (ca/exps e2 as bs (car res_e1))])
-       `(,(car res_e2) (begin ,(cadr res_e1) ,(cadr res_e2))))]
+       `(,(car res_e2)
+         (begin ,(cadr res_e1) ,(cadr res_e2))))]
     
     [`(lambda () ,e1)
      (let ([res (ca/exp e1 as bs n)])
-       `(,(car res) (lambda () ,(cadr res))))]
+       `(,(car res)
+         (lambda () ,(cadr res))))]
     
     [`(lambda (,x) ,e1)
      (let ([res (ca/exp e1 as bs n)])
-       `(,(car res) (lambda (,x) ,(cadr res))))]
+       `(,(car res)
+         (lambda (,x) ,(cadr res))))]
     
     [`(,e1 ,e2 ,e3)
      (let* ([res_e1 (ca/exp e1 as bs n)]
             [res_e2 (ca/exp e2 as bs (car res_e1))]
             [res_e3 (ca/exp e3 as bs (car res_e2))])
-       `(,(car res_e3) (,(cadr res_e1) ,(cadr res_e2) ,(cadr res_e3))))]
+       `(,(car res_e3)
+         (,(cadr res_e1) ,(cadr res_e2) ,(cadr res_e3))))]
     
     [i
      #:when (integer? i)
-     `(,n ,i)]
+     `(,n
+       ,i)]
     
     [`(,e1 ,e2 ...)
      #:when (not (empty? e2))
      (let* ([res_e1 (ca/exp e1 as bs n)]
             [res_e2 (ca/exps e2 as bs (car res_e1))])
-       `(,(car res_e2) ,(cadr res_e1) ,(cadr res_e2)))]
+       `(,(car res_e2)
+         (,(cadr res_e1) ,(cadr res_e2))))]
     
     [`(,e1)
      (let ([res (ca/exp e1 as bs n)])
-       `(,(car res) (,(cadr res))))]
+       `(,(car res)
+         (,(cadr res))))]
     
     [`(values ,v1)
      (let ([res (ca/exp v1 as bs n)])
-       `(,(car res) (values ,(cadr res))))]
+       `(,(car res)
+         (values ,(cadr res))))]
     [u
-     `(,n ,u)]))
+     `(,n
+       ,u)]))
 
 
 ;;tests
