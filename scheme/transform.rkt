@@ -5,7 +5,7 @@
 (provide ca/prog
          normalize)
 
-;; given a program, return the annotated version of it
+;; given a program, return the transformed version of it
 (define (ca/prog prog)
   (match prog
     [`(store (,sfs ...) ,e)
@@ -19,19 +19,25 @@
            (append `(store ,(cdr store+)) (cdr e+))))]
     [u u]))
 
+;; return the unique names in a program
 (define (names prog)
   (match prog
+    [`(store (,sfs ...) (raise ,err ...))
+     (get-names sfs '())]
     [`(store (,sfs ...) ,e)
      (get-names sfs e)]
     [u '()]))
+
+;; return names starting with t in a program (reserved for fresh names introduced by transformation)
+(define (ts prog)
+  (filter t*? (names prog)))
 
 (define (t*? sym)
   (match (first (string->list (symbol->string sym)))
     [#\t #t]
     [_ #f]))
 
-(define (ts prog)
-  (filter t*? (names prog)))
+
 
 ;;These functions retrieve various sets of names from a store and an expression:
 
@@ -164,7 +170,10 @@
 ;;Normalizes a program wrt alpha equivalence
 ;;I.e. renames such that two programs that are alpha equivalent should normalize to the same program
 (define (normalize prog)
-  (norm-helper prog (sort (names prog) string<? #:key symbol->string) 1 1))
+  (match prog
+    [`(store (,sfs ...) (raise ,e ...))
+     `(store () ())]
+    [prog (norm-helper prog (sort (names prog) string<? #:key symbol->string) 1 1)]))
 
 (define (gen-var-sym s n)
   (string->symbol (string-append s (number->string n))))
@@ -275,6 +284,10 @@
 
 
 ;;convert-assignments pass
+; sfs is list of store elements
+; as is list of assigned variables
+; bs is list of bound variables
+; n is current number of fresh ts inserted
 (define (ca/sfs sfs as bs n)
   (match sfs
     ['() `(,n ())]

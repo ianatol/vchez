@@ -173,6 +173,7 @@
 (full-test-ca '(store () (+ 3 4)))
 (full-test-ca '(store () (- 3 4)))
 (full-test-ca '(store () (((lambda (x) (lambda (y) (begin (set! x 5) (set! y 7)))) 6) 5)))
+(full-test-ca '(store () (((lambda (x) (begin (set! x 4) ((lambda (y) y) 6))) 5)))) ;program results in a raised exception
 (full-test-ca '(store ((x 5)) ()))
 (full-test-ca '(store ((y (lambda (x) (+ x 4)))) ()))
 (full-test-ca '(store ((y (lambda (x) (set! x 2)))) ()))
