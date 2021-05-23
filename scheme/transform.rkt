@@ -33,6 +33,7 @@
   (filter t*? (names prog)))
 
 (define (t*? sym)
+  
   (match (first (string->list (symbol->string sym)))
     [#\t #t]
     [_ #f]))
@@ -141,7 +142,7 @@
 (define (names/exp e)
   (match e
     [keyword
-     #:when (member keyword '(cons null set-car! set-cdr! car cdr + - / * -mp))
+     #:when (member keyword '(cons null set-car! set-cdr! car cdr + - / * -mp #t #f))
      '()]
     [n
      #:when (integer? n)
