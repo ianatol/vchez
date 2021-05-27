@@ -224,7 +224,6 @@ Inductive s_term : s_trm -> Prop :=
   (* if the body of an abs is well formed after opening its terms with a fresh variable, 
       it is well formed *)
   | s_term_abs : forall L ts,
-      non_empty ts ->
       (forall x, x \notin L -> s_terms (s_open_each ts x)) ->
       s_term (s_trm_abs ts)
 
@@ -232,13 +231,11 @@ Inductive s_term : s_trm -> Prop :=
      don't open with a fresh variable because bvars are not allowed in a begin
      i.e. the program (begin (bvar 0)) is NOT well formed *)
   | s_term_begin : forall ts,
-      non_empty ts ->
       s_terms ts ->
       s_term (s_trm_begin ts)
   
   (* same for seq and set *)
   | s_term_seq : forall ts,
-      non_empty ts ->
       s_terms ts -> 
       s_term (s_trm_seq ts)
 
