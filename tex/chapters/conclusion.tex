@@ -1,0 +1,17 @@
+\chapter{Conclusions and Future Work}
+In this chapter, we conclude and summarize the project, reflect on our process of proof and in building our validation frameworks, and discuss future work on this project.
+
+\section{Reflections}
+The original intent of this work was to provide a full mechanization of the proof in Coq. To that end, some of the features removed were done so with the motivation of simplifying the Coq formalization. As we discuss in section \ref{sxn:coq_overview}, Coq requires a large amount of detail and specific proof of things that are seemingly given or obvious in a paper proof. For example, we prove in our framework that substitution of a fresh variable is the identity for the \textit{locally nameless} Scheme representation in our Coq framework, something that we take as given in our paper proof.
+
+As our project's scope shifted to no longer target a full mechanization, some features were added back in to our model, but a project started with the intention of a paper proof only could have likely included the entire R6RS semantics, as the features we excluded are largely unaffected by $ca_{prog}$. While complicated features like quote would have added some complexity to the proof, the \caname\ pass does not modify quoted expressions. Therefore, the only additional complexity would be altering our various definitions to include, for example, additional 
+
+Another feature, exceptions, may have actually aided our proof by giving an even stronger definition for \textit{stuck} programs. However, it is clear to see that \caname\ would behave no differently with this change, so its exclusion presents no threat to the overall validity of our claim of correctness.
+
+\section{Future Work}
+There are a few paths for potential future work on this project. The first would be extending the paper proof in one of two ways: extending the language we prove over, and/or proving correctness of another pass 
+
+The second future work would be to continue the original scope of this project in fully mechanizing the current proof. This work would entail proving various lemmas to definitively prove Theorems \ref{thm:step_det} and \ref{thm:step} inside of our Coq framework. While our framework provides definitions for the syntax and semantics of our R6RS subset and some of the auxiliary lemmas, extending it to fully mechanize our proof would likely take some fine-tuning of the definitions, or more specific definitions of, for example, well-formed expressions, which we assume extensively throughout our paper proof.
+
+\section{Summary and Closing}
+In this work, we detailed the proof of correctness of our representation of the \caname\ pass, $ca_{prog}$. Most of our proof follows by induction on the structure of our programs and expressions, with extensive case analysis on programs formed such that a semantic step is applicable to them. We also provide frameworks in Coq and Racket for validation of our proof through computer-checked proof and testing of specific examples respectively. While we consider a subset of the R6RS semantics in all of our proofs, each has the possibility of extension to include a more complete version, though this would likely be quite difficult in the case of the Coq framework. Overall, this work provides a reasonably trustworthy proof of correctness of the \caname\ pass of the Chez Scheme compiler.

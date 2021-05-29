@@ -71,28 +71,8 @@ Theorem unique_ec :
     eval_ctx C ->
     t = (C t') -> 
     step s (C t') s' t'').
-Proof.
-  intros. 
-  induction t using s_trm_mutind. (* use our custom induction principle to get *)
-  - destruct x. (*s_trm_var case*)
-    + right. left. inversion H. (* standalone bvar -> False by s_term def *)
-    + right. right. (* standalone fvar steps to put itself in store *)  
-      exists (id). (* hole is just itself *)
-      exists (s_trm_var (fvar x)).
-      exists s.
-      exists (match (get_val x s) with
-              | SomeE v => v
-              | NoneE e => s_trm_err e
-              end).
-     intros. 
-     remember (get_val x s). destruct o.
-     * compute. apply step_var. symmetry. apply Heqo.
-     * compute. apply step_var_err. symmetry. apply Heqo.
-  - destruct IHt2. inversion H. apply H3.      
-       
-   try (left; repeat constructor).
+Proof. Abort.
 
-  
   
        
 Inductive vsr : sfs -> s_trm -> Prop :=
@@ -121,21 +101,6 @@ Proof.
   - destruct ts.  
   Abort.
      
-    
-    
-
-(*
-To Prove:
-  Unique Eval Contexts:
-    term t -> decomp t ec1 -> decomp t ec2 -> ec1 = ec2
-  
-  
-  
-  *)
-
-
-
-
 
 
 

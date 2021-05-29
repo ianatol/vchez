@@ -67,7 +67,6 @@ Proof.
     apply step_ctx with (C := C). apply H.
     apply step_app; try repeat constructor.
       apply s_term_abs with (L := s_fv (s_trm_abs [` (s_trm_car; s_trm_var (bvar 0))])).
-      intros.
       compute. try repeat constructor.
   eapply mstep_trans.
     apply mstep_one.

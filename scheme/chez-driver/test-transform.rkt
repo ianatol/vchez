@@ -113,7 +113,7 @@
   (let* ([P prog]
          [P~ (step-tag P)]
          [P~-step (car P~)]
-         [P~-prog (cdr P~)]
+         [P~-prog (car(cdr P~))]
          [P^ (ca/prog P)]
          [P~^ (ca/prog P~-prog)])
     (display (~a P " steps to " P~-prog "\nUsing rule: "))
@@ -132,7 +132,7 @@
 
 
 ;;appN!
-;(sim-example 5 '(store () ((lambda (x) (set! x 5)) 4)))
+(sim-example 5 '(store () ((lambda (x) (set! x 5)) 4)))
 ;(sim-example 5 '(store () ((lambda (x) (begin (set! x 5) x)) 4)))
 
 ;;appN
@@ -152,6 +152,8 @@
 
 ;;begind 
 ;(sim-example 1 '(store ((x 99)) (begin (set! x 100))))
+
+
 
 ;;+
 ;(sim-example 1 '(store () (+ 3 4)))
