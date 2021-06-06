@@ -18,27 +18,40 @@ Another area where we must make an assumption is in developing a model of \canam
 \subsection{Intuition}
 The \textit{np-convert-assignments} pass removes indefinite-extent assignments and replaces them with assignments that have a defined scope. This pass is quite small, defined in about 40 lines in the production Chez Scheme compiler. The size of our proof and accompanying frameworks relative to the size of the transformation is a testament to the difficulty of verifying compilation correctness.
 
-The intuition for the pass is best acquired through observing a few examples:
+The intuition for the pass is best acquired through observing an example of a transformation on a small program:
 
 \begin{figure}[h]
-    \centering
-    \begin{enumerate}
-        \item $ca_{e}$(set! x v) = (set-car! $x^{*}$ $\hat{v}$)
-        \item $ca_{e}$(lambda (x) (set! x v)) = \newline (lambda (t) ((lambda (x) (set-car! x $\hat{v}$))(cons t null))) \newline \textit{Where t is fresh}
-        \item $ca_{prog}$(store ((x $v$)) x) = (store (($pp_x$ (cons $\hat{v}$ null))) (car $pp_x$))
-    \end{enumerate}
-    Where $\hat{A}$ means the appropriate $ca$ function applied to A.
-    
-    $x^{*}$ could either be $x$ or $pp_x$ depending on the context.
-    \caption{Motivating examples of the \caname \ pass.}
-    \label{fig:ca_examples}
+
+$ca_{prog}$(store ((x $v_1$)) (lambda (y)
+
+\qquad \qquad \ \qquad \ \qquad \quad \ (begin 
+
+\qquad \qquad \ \qquad \ \qquad \qquad \ (set! y $v_2$) 
+
+\qquad \qquad \ \qquad \ \qquad \qquad \ (+ x y)))) =
+ 
+\qquad \ (store (($pp_x$ (cons $\hat{v_1}$ null))) (lambda (t)
+
+\qquad \qquad \qquad \qquad \qquad \qquad \qquad \quad \ ((lambda (y) 
+
+\qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \ (begin 
+
+\qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \quad \ (set-car! y $\hat{v_2}$) 
+
+\qquad \qquad \qquad \qquad \qquad \qquad \qquad \qquad \quad \  (+ (car $pp_x$) (car y)))) 
+
+\qquad \qquad \qquad \qquad \qquad \qquad \qquad \quad \ \ (cons t null))))
+
+Where $\hat{a}$ means the appropriate \caname\ function applied to a.
+    \caption{Motivating example for the \caname \ pass.}
+    \label{fig:ca_example}
 \end{figure}
 
-The first example shows the primary action of the pass --- to remove set! expressions. Depending on if x is in the store or enclosed in a lambda, we may transform it into a pointer or not, as shown in the next two examples. Notice the recursive call to $ca_e$ on $v$.
+We can immediately see the primary action of the pass --- to remove set! expressions. We can see that the set! expression inside the begin expression is transformed to a set-car! expression. Notice also the recursive call on the value of the set! expression. Depending on if a variable is in the store or enclosed in a lambda, we may transform it into a pointer or not, as shown by the transformation that occurs to the variables x and y respectively.
 
-The second example shows how lambda expressions are modified to support the transformation of set! expressions. Since its arguments are now assumed to be cons cells, we have to first wrap its arguments inside of a list. Also note that we do not change the $x$ to $pp_x$, as at this point it is just a representation of the lambda's argument.
+We can also see how lambda expressions are modified to support the transformation of set! expressions. Since its arguments are now assumed to be cons cells, we have to first wrap its arguments inside of a list. This is also the reason we do not change $y$ to $pp_y$, as at this point it is still an argument to the lambda expression.
 
-Finally, the last example shows how $ca$ deals with partially evaluated programs. Since the \textbf{appN!} rule is the only one that can create new non-list store locations, we can assume that variables in the store correspond to previously evaluated lambda abstractions. Therefore, we must treat variables and set! expressions that refer to store locations as transformation targets. We also retroactively convert these previously evaluated store locations. In this case, we do change $x$ to $pp_x$, so that expressions that contain it can properly evaluate.
+Finally, we can see how $ca$ deals with store locations of partially evaluated programs. Since the \textbf{appN!} rule is the only one that can create new non-list store locations, we can assume that variables in the store correspond to previously evaluated lambda abstractions. Therefore, we must treat variables and set! expressions that refer to store locations as transformation targets. We also retroactively convert these previously evaluated store locations. In this case, we do change $x$ to $pp_x$, so that expressions that contain it can properly evaluate.
 
 % Some explanation for these examples is required. The first example is one of the simplest --- it transforms a variable reference to a call to \textit{car} on a pair pointer representing that variable. We will see in the next examples why this pair pointer conversion is necessary, but we can see clearly the transformation that occurs to variable references. It is also important to note a slight abuse of our notation in this example: that we perform transformation on an evaluation context ($\hat{P}$). While the pass does not actually operate on decomposed programs, we use this notation for clarity and to be able to isolate transformations on specific parts of a program. In section \ref{sxn:ctx_trans}, we show that this way of transforming a program that is decomposed into a context and an expression is the same as transforming the program before decomposition.
 
@@ -47,38 +60,32 @@ Finally, the last example shows how $ca$ deals with partially evaluated programs
 % The third example demonstrates the transformation of a lambda expression that contains an assigning set! expression. The original lambda expression is wrapped in an additional lambda expression and applied to the argument of that lambda expression wrapped in a cons cell. We can also see the transformation of the assigning set! expression. The purpose of this specific transformation is to make sure that all of the set! calls and variable references inside the lambda expression still work. Since they have been transformed to operate on lists, this step of the transformation ensures that they will always receive a list as their argument.
 
 % The fourth example exhibits the behavior of the transformation on a partially evaluated program. Since the \textbf{appN!} semantic rule is the only rule that adds variables to the store, we can assume that if a variable is in the store, it was the target of a set! somewhere in the body of the lambda that was evaluated using \textbf{appN!} (since this is a side condition of the rule). Therefore, for the transformation to work correctly on partially evaluated programs, we need to transform each variable in the store that is not already a pair pointer. Note that all variables transformed this way are converted to pair pointers, since they now refer to cons cells. Therefore, after a transformation, our store will contain only pair pointers.
-
 \subsection{Definition}
-We now formally define our model of the transformation as the following functions on the syntax of our language:
-
+Figure \ref{fig:ca_fxs} defines our model of the transformation as functions on the syntax of our language. For notational brevity, we assume that each function has access to the store and a list of all names that are the target of a set! in the program.
+\begin{figure}
+    \centering
 \begin{definition} {\large\textbf{ca$_{prog}$}} --- Programs
 
-$ca_{prog}(store\ (sf \dots)\ e) = (store\ (ca_{sf}(sf) \dots)\ ca_e(e)) $
+$ca_{prog}((store\ (sf \dots)\ e)) = (store\ (ca_{sf}(sf) \dots)\ ca_e(e)) $
 
 \end{definition}
 
 \begin{definition} {\large\textbf{ca$_{sf}$}} --- Store Locations
 
-$ca_{sf}(x\ v) = (pp_x\ (cons\ v\ null))$
+$ca_{sf}((x\ v)) = (pp_x\ (cons\ ca_e(v)\ null))$
 
-$ca_{sf}(pp\ (cons\ v\ null)) = (pp\ (cons\ v\ null))$
+$ca_{sf}((pp\ (cons\ v_1\ v_2))) = (pp\ (cons\ ca_e(v_1)\ ca_e(v_2))$
 \end{definition}
 
 \begin{definition} {\large\textbf{ca$_e$}} --- Expressions
 
-$ca_e(begin\ e\ e\ \dots) = (begin\ ca_e(e)\ ca_e(e)\ \dots)$
-
-$ca_e(e\ e\ \dots) = (ca_e(e)\ ca_e(e)\ \dots)$
-
-$ca_e(set!\ x\ e) = (set \mhyphen car!\ pp_x\ ca_e(e))$
+$ca_e((set!\ x\ e)) = (set \mhyphen car!\ pp_x\ ca_e(e))$
 
 \qquad where x is in the store.
 
-$ca_e(set!\ x\ e) = (set \mhyphen car!\ x\ ca_e(e))$
+$ca_e((set!\ x\ e)) = (set \mhyphen car!\ x\ ca_e(e))$
 
 \qquad where x is not in the store.
-
-$ca_e(values\ v) = (values\ ca_e(v))$
 
 $ca_e(x) = (car\ pp_x)$
 
@@ -86,15 +93,27 @@ $ca_e(x) = (car\ pp_x)$
 
 $ca_e(x) = (car\ x)$
 
-\qquad where x is not in the store.
+\qquad where x is not in the store, but is assigned to somewhere in the program.
 
-$ca_e(lambda\ (x)\ e) = (lambda\ (t)\ ((lambda\ (x)\ ca_e(e))(cons\ t\ null)))$
+$ca_e(x) = x$
 
-\qquad where x is the target of a set! in e, t is fresh.
+\qquad where x is not in the store or assigned to.
 
-$ca_e(lambda\ (x)\ e) = (lambda\ (x)\ ca_e(e))$ 
+$ca_e((lambda\ (x)\ e)) = (lambda\ (t)\ ((lambda\ (x)\ ca_e(e))\ (cons\ t\ null)))$
 
-\qquad where x is not the target of a set! in e.
+\qquad where x is assigned to, t is fresh.
+
+$ca_e((lambda\ (x)\ e)) = (lambda\ (x)\ ca_e(e))$ 
+
+\qquad where x is not assigned to.
+
+$ca_e((begin\ e_1\ e_2\ \dots)) = (begin\ ca_e(e_1)\ ca_e(e_2)\ \dots)$
+
+$ca_e((e_1\ e_2\ \dots)) = (ca_e(e_1)\ ca_e(e_2)\ \dots)$
+
+$ca_e((if\ e_1\ e_2\ e_3)) = (if\ ca_e(e_1)\ ca_e(e_2)\ ca_e(e_3))$
+
+$ca_e((values\ v)) = (values\ ca_e(v))$
 
 All other expressions are unchanged by $ca_e$.
 
@@ -104,25 +123,33 @@ Finally, we define $ca_{ctx}$ for use in applying the pass to decomposed program
 
 \begin{definition} {\large\textbf{ca$_{ctx}$}} --- Evaluation Contexts
 
-$ca_{ctx}(store\ (sf\ \dots)\ F^{*}) = (store\ (ca_{sf}(sf)\ \dots)\ ca_{ctx}(F^{*}))$
+$ca_{ctx}((store\ (sf\ \dots)\ F_{*})) = (store\ (ca_{sf}(sf)\ \dots)\ ca_{ctx}(F_{*}))$
 
-$ca_{ctx}(v\ \dots\ F^{\circ}\ v\ \dots) = (ca_e(v)\ \dots\ ca_{ctx}(F^{\circ})\ ca_e(v)\ \dots)$
+$ca_{ctx}((v_1\ \dots\ F_{\circ}\ v_2\ \dots)) = (ca_e(v_1)\ \dots\ ca_{ctx}(F_{\circ})\ ca_e(v_2)\ \dots)$
 
-$ca_{ctx}(if\ F^{\circ}\ e\ e) = (if\ ca_{ctx}(F^{\circ})\ ca_e(e)\ ca_e(e))$
+$ca_{ctx}((if\ F_{\circ}\ e_1\ e_2)) = (if\ ca_{ctx}(F_{\circ})\ ca_e(e_1)\ ca_e(e_2))$
 
-$ca_{ctx}(set!\ x\ F^{\circ}) = (set \mhyphen car!\ pp_x\ ca_{ctx}(F^{\circ}))$
+$ca_{ctx}((set!\ x\ F_{\circ})) = (set \mhyphen car!\ pp_x\ ca_{ctx}(F_{\circ}))$
 
 \qquad where x is in the store.
 
-$ca_{ctx}(set!\ x\ F^{\circ}) = (set \mhyphen car!\ x\ ca_{ctx}(F^{\circ}))$
+$ca_{ctx}((set!\ x\ F_{\circ})) = (set \mhyphen car!\ x\ ca_{ctx}(F_{\circ}))$
 
-\qquad wher x is not in the store.
+\qquad where x is not in the store.
 
-$ca_{ctx}(begin\ F^{*}\ e\ e\ \dots) = (begin\ ca_{ctx}(F^{*})\ ca_e(e)\ ca_e(e)\ \dots)$
+$ca_{ctx}((begin\ F_{*}\ e_1\ e_2\ \dots)) = (begin\ ca_{ctx}(F_{*})\ ca_e(e_1)\ ca_e(e_2)\ \dots)$
 
-$ca_{ctx}([\ ]) = ca_{ctx}([\ ]^{*}) = ca_{ctx}([\ ]^{\circ}) = [\ ]$
+$ca_{ctx}([\ ]) = [\ ]$
+
+$ca_{ctx}([\ ]_{*}) = [\ ]_{*}$
+
+$ca_{ctx}([\ ]_{\circ}) = [\ ]_{\circ}$
 
 \end{definition}
+    \caption{\caname\ functions}
+    \label{fig:ca_fxs}
+\end{figure}
+\newpage
 
 \subsection{Lemmas}
 Here we prove some properties of the \caname\ functions that are necessary for our later proofs.
@@ -132,13 +159,13 @@ Here we prove some properties of the \caname\ functions that are necessary for o
 If v is a value, then $ca_e(v)$ is a value.
 \end{lemma}
 \begin{proof}
-By induction on the structure of our values.
+By induction on the structure of our value expressions.
 
 For most values, $ca_e$ makes no changes. For these cases, $ca_e(v)$ is trivially a value.
 
 The only value expression which is modified by $ca_e$ is $(lambda\ (x)\ e)$, where x is the target of a set! inside of e. We can observe the transformation:
 
-$ca_e((lambda\ (x)\ e)) = (lambda\ (t)\ ((lambda\ (x)\ ca_e(e))(cons\ t\ null)))$
+$ca_e((lambda\ (x)\ e)) = (lambda\ (t)\ ((lambda\ (x)\ ca_e(e))\ (cons\ t\ null)))$
 
 We can clearly see that this is still a value, since it is of the form $(lambda\ (t)\ e')$, where $e' = ((lambda\ (x)\ ca_e(e))(cons\ t\ null))$
 
@@ -157,9 +184,9 @@ The non-value expressions that get transformed by $ca_e$ are:
     \item $(set!\ x\ v)$
 \end{enumerate}
 
-$ca_e(x)$ evaluates to either $(car\ x)$ or $(car\ pp_x)$, both of which are still expressions.
+$ca_e(x)$ evaluates to either $(car\ x)$, $(car\ pp_x)$, or just $x$, all of which are still expressions.
 
-$(set!\ x\ v)$ similarly evaluates to either $(set \mhyphen car!\ x\ \hat{v})$ or $(set \mhyphen car!\ pp_x\ \hat{v})$, which are again both still expressions.
+$(set!\ x\ v)$ similarly evaluates to either $(set \mhyphen car!\ x\ \hat{v})$ or $(set \mhyphen car!\ pp_x\ \hat{v})$, which are both still expressions.
 
 Therefore, if $e$ is a non-value expression, $ca_e(e)$ will always be a non-value expression.
 
@@ -167,49 +194,49 @@ Therefore, if $e$ is a non-value expression, $ca_e(e)$ will always be a non-valu
 
 \begin{lemma}\label{lem:trans_decomp} Transformation Preserves Decomposition
 
-$ca_{prog}(C[p]) = ca_{ctx}(C)[ca_e(p)]$
+$ca_{prog}(C[e]) = ca_{ctx}(C)[ca_e(e)]$
 
 for all evaluation contexts C and expressions p.
 
 \end{lemma}
 \begin{proof} We proceed by induction on the structure of our evaluation contexts.
 
-Consider the cases of C: $(store (sf ...) F^{*})$
+Consider the cases of C: $(store (sf ...) F_{*})$
 
-and the cases of $F^{*}$: $[\ ]^{*}$, $F$.
+and the cases of $F_{*}$: $[\ ]_{*}$, $F$.
 
-If $F^{*}$ is a hole, then we must show that 
+If $F_{*}$ is a hole, then we must show that 
 
-$ca_{prog}((store (sf ...)\ p)) = ca_{ctx}((store (sf ...) [(ca_{e}(p))]))$
+$ca_{prog}((store (sf ...)\ e)) = ca_{ctx}((store (sf ...) [(ca_{e}(e))]))$
 
 which follows from the definitions of $ca_{prog}$ and $ca_{ctx}$.
 
-Otherwise, consider the cases of F: $[\ ]$, $(v \dots F^{\circ}\ v \dots)$, $(if\ F^{\circ}\ e\ e)$, $(set!\ x\ F^{\circ})$, and $(begin\ F^{*}\ e\ e \dots)$.
+Otherwise, consider the cases of F: $[\ ]$, $(v \dots F_{\circ}\ v \dots)$, $(if\ F_{\circ}\ e\ e)$, $(set!\ x\ F_{\circ})$, and $(begin\ F_{*}\ e\ e \dots)$.
 
 $[\ ]$ follows by definitions as before. 
 
-In the case of  $(v \dots F^{\circ}\ v \dots)$, $(if\ F^{\circ}\ e\ e)$, $(begin\ F^{*}\ e\ e \dots)$, $ca_{ctx}$ makes no structural changes to the context other than the expected calls to $ca_{ctx}$ and $ca_e$ on sub-expressions. Therefore, it follows from our induction principle and the definitions of $ca_{ctx}$, $ca_e$ that the transformation preserves decomposition in these cases.
+In the case of  $(v \dots F_{\circ}\ v \dots)$, $(if\ F_{\circ}\ e\ e)$, $(begin\ F_{*}\ e\ e \dots)$, $ca_{ctx}$ makes no structural changes to the context other than the expected calls to $ca_{ctx}$ and $ca_e$ on sub-expressions. Therefore, it follows from our induction principle and the definitions of $ca_{ctx}$, $ca_e$ that the transformation preserves decomposition in these cases.
 
-The interesting case, $(set!\ x\ F')$, has a transformation occur in the evaluation context. There are two possibilities for the transformation of $(set!\ x\ F')$:
+The interesting case, $(set!\ x\ F_{\circ})$, has a transformation occur in the evaluation context. There are two possibilities for the transformation of $(set!\ x\ F_{\circ})$:
 
 \begin{enumerate}
-    \item $ca_{ctx}(set!\ x\ F') = (set \mhyphen car!\ pp_x\ ca_{ctx}(F'))$ if x is in the enclosing store.
-    \item $ca_{ctx}(set!\ x\ F') = (set \mhyphen car!\ x\ ca_{ctx}(F'))$ if x is not in the store (i.e. if x is bound by a lambda expression in some enclosing context).
+    \item $ca_{ctx}((set!\ x\ F_{\circ})) = (set \mhyphen car!\ pp_x\ ca_{ctx}(F_{\circ}))$ if x is in the enclosing store.
+    \item $ca_{ctx}((set!\ x\ F_{\circ})) = (set \mhyphen car!\ x\ ca_{ctx}(F_{\circ}))$ if x is not in the store (i.e. if x is bound by a lambda expression in some enclosing context).
 \end{enumerate}
 
 In case 1, we need to show that:
 
-$ca_{prog}(store\ (sf \dots)\ (set!\ x\ F'[p])) = ca_{ctx}(store\ (sf \dots)\ (set!\ x\ ca_{ctx}(F')[ca_e(p)])$
+$ca_{prog}((store\ (sf \dots)\ (set!\ x\ F_{\circ}[p]))) = ca_{ctx}((store\ (sf \dots)\ (set!\ x\ ca_{ctx}(F_{\circ})[ca_e(p)])))$
 
 Since we know x must be in the store, 
 
-$ca_{prog}(store\ (sf \dots)\ (set!\ x\ F'[p])) = (store\ (ca_{sf}(sf) \dots) (set \mhyphen car!\ pp_x\ ca_{e}(F'[p])))$. 
+$ca_{prog}((store\ (sf \dots)\ (set!\ x\ F_{\circ}[p]))) = (store\ (ca_{sf}(sf) \dots)\ (set \mhyphen car!\ pp_x\ ca_{e}(F_{\circ}[p])))$. 
 
 This case follows by definition of $ca_{e}$ and $ca_{ctx}$, and by our induction principle.
 
 Case 2 follows similarly, except that x is not in the store, so 
 
-$ca_{prog}(store\ (sf \dots)\ (set!\ x\ F'[p])) = (store\ (ca_{sf}(sf) \dots) (set \mhyphen car!\ x\ ca_{e}(F'[p])))$. 
+$ca_{prog}((store\ (sf \dots)\ (set!\ x\ F_{\circ}[p]))) = (store\ (ca_{sf}(sf) \dots)\ (set \mhyphen car!\ x\ ca_{e}(F_{\circ}[p])))$. 
 
 Therefore, we have shown that our transformation preserves decomposition for all cases.
 \end{proof}
@@ -231,7 +258,7 @@ Transitive, reflexive closure of $\step$
 \begin{enumerate}
     \item $a$ \trstep\ $c$ if $a$ \trstep\ $b$ and $b$ \trstep\ $c$ (Transitivity)
     \item $a$ \trstep\ $a$ (Reflexivity)
-    \item $a$ \trstep\ $b$ if $a \step\ b$ (Closure)
+    \item $a$ \trstep\ $b$ if $a\ \step\ b$ (Closure)
 \end{enumerate}
 \end{definition}
 
@@ -302,7 +329,7 @@ Our proof is structured as follows:
 
 
 \subsection{Deterministic Semantics}\label{sxn:det_sem}
-An implicit assumption made by figure \ref{fig:sim_diagram} is that our programs follow a canonical reduction order. That is, that a program P will always step to the same P'. Another way of stating this is by saying that our semantics are \textit{deterministic}.
+An implicit assumption made by figure \ref{fig:sim_diagram} is that our programs only have one potential step to take. That is, that a program P will always step to the same P'. Another way of stating this is by saying that our semantics are \textit{deterministic}.
 
 \begin{definition} Deterministic Relation
 
@@ -335,15 +362,14 @@ $\forall P,$ P is one of the three:
     \item $\exists\ unique\ C, \ P = C[e], C[e]\ \step\ C'[e']$ --- Reducible
 \end{enumerate}
 \end{lemma}
-\begin{proof} By induction on the structure of our expressions.
-
-The only case of P is $(store\ (sf\ \dots)\ e)$.
+\begin{proof} $\\$
+By definition, P must be of the form $(store\ (sf\ \dots)\ e)$.
 
 We can see that the VSR property holds for a program if it holds for the program's expression:
 
 If $e$ is a value, then $P = (store\ (sf\ \dots)\ v)$.
 
-If $C[e]$ has no applicable semantic steps to take, we say $e$ is stuck. Clearly in this case, $\lnot\ \exists P',\ P=C[e]\ \step P'$
+If $P = (store\ (sf\ \dots)\ [e])$ has no applicable semantic steps to take, we say $e$ is stuck. Clearly in this case, $\lnot\ \exists P',\ P\ \step P'$
 
 Finally, if $e = F[e']$ such that e' is a reducible expression, then $C[e] = C[F[e']]$ has a valid semantic step. We refer to this as $e$ being \textit{reducible}.
 
@@ -359,7 +385,7 @@ We know by induction hypothesis that all $e_i$ in the body of the begin expressi
 
 Consider when $e_2\ \dots$ is empty. Therefore, $e = (begin\ e_1)$. Hence, we can directly apply the \textbf{beginD} rule. Therefore, e is reducible, and the unique context is simply the store and an empty hole.
 
-If $e_2\ \dots$ is not empty, then consider the case where $e_1$ is a value. Then, we can decompose $e$ into $F[v]$, where $F = (begin\ [\ ]^{*}\ e_2\ e_3\ \dots)$. The \textbf{promote} rule is applicable here, and there is no other decomposition we can perform on e. Therefore, this case falls under reducible. Next, consider when $e_1$ is stuck. Similar to the value case, the evaluation context for begin applies to e, but since $e_1$ is not a value, \textbf{promote} is not applicable. Therefore, we are stuck, since there is no applicable rule or further decomposition that would allow a step to be taken. Finally, consider the case where $e_1$ is reducible. Since $e_1$ is not a value, \textbf{promote} again cannot apply.  Then, we can decompose e into $F[e_1']$, where $F = (begin\ [\ ]\ e_2\ e_3\ \dots)$. Since \textbf{promote} and \textbf{beginD} are not applicable, F is the unique decomposition, with whichever reduction step $F[e_1']$ takes being the only applicable step.
+If $e_2\ \dots$ is not empty, then consider the case where $e_1$ is a value. Then, we can decompose $e$ into $F[v]$, where $F = (begin\ [\ ]_{*}\ e_2\ e_3\ \dots)$. The \textbf{promote} rule is applicable here, and there is no other decomposition we can perform on e. Therefore, this case falls under reducible. Next, consider when $e_1$ is stuck. Similar to the value case, the evaluation context for begin applies to e, but since $e_1$ is not a value, \textbf{promote} is not applicable. Therefore, we are stuck, since there is no applicable rule or further decomposition that would allow a step to be taken. Finally, consider the case where $e_1$ is reducible. Since $e_1$ is not a value, \textbf{promote} again cannot apply.  Then, we can decompose e into $F[e_1']$, where $F = (begin\ [\ ]\ e_2\ e_3\ \dots)$. Since \textbf{promote} and \textbf{beginD} are not applicable, F is the unique decomposition, with whichever reduction step $F[e_1']$ takes being the only applicable step.
 
 \textbf{Case 2: $e = (if\ e_1\ e_2\ e_3)$}
 
@@ -377,36 +403,36 @@ Again, we know that all $e_i$ in the body of e are either values, stuck, or redu
 
 Consider when all $e_i$ are values. Then, there can be various rules applied, depending on the specific value of each $e_i$: \textbf{cons, car, cdr, set-car!, set-cdr!, appN!, appN, app0} and all of the arithmetic rules are potentially applicable here. If none of these rules are applicable, then $e$ is stuck, since none of $e_i$ are further reducible.
 
-If all of $e_i$ are stuck, then $e$ can take the \textbf{mark} step and is therefore reducible (though it will be stuck immediately after). The same follows if all of $e_i$ are reducible, except it will continue to take steps after.
+If all of $e_i$ are stuck non-values, then $e$ can take the \textbf{mark} step and is therefore reducible (though it will be stuck immediately after). The same follows if all of $e_i$ are reducible non-values, except it will continue to take steps after.
 
 Now, consider if $e_i$ are a mix of stuck, reducible, and value expressions. There are three possible cases here:
 
 \begin{enumerate}
-    \item $e$ can be decomposed into $F[e_i]$, where $F = (v\ \dots\ F^{\circ}\ v\ \dots)$.
+    \item $e$ can be decomposed into $F[e']$, where $F = (v\ \dots\ F_{\circ}\ v\ \dots)$.
     \item The \textbf{mark} rule is applicable.
     \item $e$ is stuck.
 \end{enumerate}
 
-We know this because \textbf{mark} is the only semantic rule applicable to $(e_1\ e_2\ \dots)$ expressions with non-value sub-expressions. However, due to the requirement of \textbf{mark} that $e_2\dots$ contains a non-value expression, it is never the case that \textbf{mark} can be applicable and $e$ can be decomposed using the $(v\ \dots\ F^{\circ}\ v\ \dots)$ evaluation context at the same time.
+We know this because \textbf{mark} is the only semantic rule applicable to $(e_1\ e_2\ \dots)$ expressions with non-value sub-expressions. However, due to the requirement of \textbf{mark} that $e_2\dots$ contains a non-value expression, it is never the case that \textbf{mark} can be applicable and $e$ can be decomposed using the $(v\ \dots\ F_{\circ}\ v\ \dots)$ evaluation context at the same time. If \textbf{mark} is not applicable, and a decomposition into the $(v\ \dots\ F_{\circ}\ v\ \dots)$ evaluation context is not possible, then $e$ is clearly stuck, since there are no other applicable semantic rules or possible evaluation context decompositions.
 
-Therefore, consider the possibilities of $e_1$ in the decomposition case. $e_1$ cannot be a value, since then all of $e_i$ would be values. If $e_1$ is reducible, then that is the semantic step that $e$ must take. Otherwise, if $e_1$ is stuck, then $e$ is stuck, since all other $e_i$ are values.
+Therefore, consider the possibilities of $e'$ in the decomposition case. $e'$ cannot be a value, since then all of $e_i$ would be values, which contradicts our assumption. If $e'$ is reducible by some semantic step, then that is the semantic step that $e$ must take. Otherwise, if $e'$ is stuck, then $e$ is stuck, since all other $e_i$ are values.
 
 In the \textbf{mark} and stuck cases, $e$ is clearly reducible and stuck respectively.
 
 
 \textbf{Case 4: $e = (set!\ x\ e_1)$}
 
-If $x$ is not in the store, e is clearly stuck, so we assume $x$ is in the store.
+If $x$ is not in the store, e is clearly stuck, so we consider the case where $x$ is in the store.
 
-Again, by induction principle, $e_1$ must be a value, stuck, or reducible.
+By induction principle, $e_1$ must be a value, stuck, or reducible.
 
 If $e_1$ is a value, the \textbf{set!} rule is applicable.
 
-Otherwise, if not, $e$ is stuck if $e_1$ is, or reducible if $e_1$ is.
+Otherwise, if not, $e$ is stuck if $e_1$ is, or reducible if $e_1$ is, with the $(set!\ x\ F_{\circ})$ evaluation context being the only possible decomposition, and therefore unique.
 
 \textbf{Case 5: $e = (values\ v)$}
 
-If $e$ is in a $[\ ]^{\circ}$ context, then \textbf{demote} is applicable, and $e$ is therefore reducible. Otherwise, it is stuck.
+If $e$ is in a $[\ ]_{\circ}$ context, then \textbf{demote} is applicable, and $e$ is therefore reducible. Otherwise, it is stuck.
 
 \textbf{Case 6: $e = x$}
 
@@ -415,25 +441,7 @@ If $x$ is in the store, then \textbf{var} is applicable, and $e$ is therefore re
 By showing this property for all cases of P and e, we have proven it is true for all programs by induction principle.
 \end{proof}
 
-Since we have shown that if a program reduces, it does so by decomposing uniquely into an evaluation context and a reducible expression, Theorem \ref{thm:step_det} follows from Lemma \ref{lem:vsr}. 
-
-% In case 2, we again know that all expressions in the body of e have the unique evaluation context decomposition property.
-
-% However, case 2 is quite different from case 1 in that there are several semantic rules that apply to various sequences of values. For this part of the proof, rather than doing case analysis on several $e_i$ values simultaneously, we will instead look closely at applicable semantic rules and the sequence evaluation context to show that sequence expressions decompose uniquely.
-
-% All of the list-oriented semantic rules require that the sequence is entirely filled with values. Therefore, if e = ($v_1$ $v_2$ ...), there are two possibilities: 
-% \begin{enumerate}
-%     \item There is an applicable semantic rule. In this case, e uniquely decomposes to a hole and itself.
-%     \item There is no applicable semantic rule. We can apply the sequence evaluation context, but since e is comprised entirely of values, no step can be taken in any of the decompositions. Therefore, e is stuck.
-% \end{enumerate}
-
-% Next, we consider when there are non-value $e_i$ expressions in the body of e. The two remaining semantic rules both only apply in this case. If e is of the form ($e_1$  ...), the only applicable rule is \textit{mark1}. The sequence evaluation context is not applicable because $e_1$ 
-
-
-
-% (set! $x$ $t$), where $t$ is some non-value expression, has no corresponding semantic rule. However, this expression can be decomposed into $E[t]$, where $E = $ (set! $x$ []). Since there are no other evaluation contexts for set! expressions, and no semantic rule for set! with a non-value as its second argument, this decomposition is unique.
-
-% The other cases follow similarly to \textit{set!}. Cleverly and necessarily, there are no expressions with directly applicable semantic rules that can also be decomposed into an evaluation context that isn't just an empty hole.
+Since we have shown that if a program reduces, it does so by decomposing uniquely into an evaluation context and a reducible expression, Theorem \ref{thm:step_det} follows from Lemma \ref{lem:vsr}. That is, if $P = C[e]$, $P\ \step\ P_1$, and $P\ \step\ P_2$, then $P_1 = P_2 = C'[e']$ by Lemma \ref{lem:vsr}.
 
 \subsection{$ca_{prog}$ is a simulation relation.\label{sxn:sim}}
 In this section we show that the relation defined by the \textit{np-convert-assignments} pass is a simulation relation. First, we formally define our notion of simulation:
@@ -532,20 +540,20 @@ We propose that $\hat{P}$ will take 5 steps to get to $P^{*}$.
     (store\ (\hat{sf} \dots) \hat{F}[((lambda\ (x)\  \hat{e})(cons\ \hat{v}\ null))]) = 
     \]
     \[
-    (store\ (\hat{sf} \dots) \hat{F^{+}}[(cons\ \hat{v}\ null)])
+    (store\ (\hat{sf} \dots) \hat{F_{+}}[(cons\ \hat{v}\ null)])
     \]
-    where $\hat{F^{+}} = \hat{F}[((lambda\ (x)\ \hat{e})[\ ])]$.
+    where $\hat{F_{+}} = \hat{F}[((lambda\ (x)\ \hat{e})[\ ])]$.
     
     We can then reduce using the \textbf{cons} rule:
     \[
-    (store\ (\hat{sf} \dots) \hat{F^{+}}[(cons\ \hat{v}\ null)])\ \step
+    (store\ (\hat{sf} \dots) \hat{F_{+}}[(cons\ \hat{v}\ null)])\ \step
     \]
     \[
-    (store\ (\hat{sf} \dots (pp\ (cons\ \hat{v}\ null))) \hat{F^{+}}[pp])
+    (store\ (\hat{sf} \dots (pp\ (cons\ \hat{v}\ null))) \hat{F_{+}}[pp])
     \]
     And expand our context:
     \[
-    (store\ (\hat{sf} \dots (pp\ (cons\ \hat{v}\ null))) \hat{F^{+}}[pp]) = 
+    (store\ (\hat{sf} \dots (pp\ (cons\ \hat{v}\ null))) \hat{F_{+}}[pp]) = 
     \]
     \[
     (store\ (\hat{sf} \dots (pp\ (cons\ \hat{v}\ null)))\hat{F}[((lambda\ (x)\ \hat{e})\ pp)]
